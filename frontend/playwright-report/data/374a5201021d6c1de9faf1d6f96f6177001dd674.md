@@ -1,0 +1,49 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "AI-Across" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - generic [ref=e11]: AI-Across
+        - button [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+      - navigation [ref=e15]:
+        - link "Dashboard" [ref=e16] [cursor=pointer]:
+          - /url: /
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - link "Assistants" [ref=e23] [cursor=pointer]:
+          - /url: /assistants
+          - img [ref=e24]
+          - generic [ref=e27]: Assistants
+        - link "Chat" [ref=e28] [cursor=pointer]:
+          - /url: /chat
+          - img [ref=e29]
+          - generic [ref=e31]: Chat
+        - link "Settings" [ref=e32] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e33]
+          - generic [ref=e36]: Settings
+      - paragraph [ref=e38]: AI-Across v1.0
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - heading "Assistants" [level=1] [ref=e42]
+        - link "New Assistant" [ref=e43] [cursor=pointer]:
+          - /url: /assistants/new
+          - img [ref=e44]
+          - text: New Assistant
+        - button [ref=e45] [cursor=pointer]:
+          - img [ref=e46]
+      - generic [ref=e49]:
+        - generic [ref=e50]:
+          - img [ref=e51]
+          - textbox "Search assistants..." [ref=e54]
+        - button "Show Deleted" [ref=e55] [cursor=pointer]:
+          - img [ref=e56]
+          - text: Show Deleted
+```

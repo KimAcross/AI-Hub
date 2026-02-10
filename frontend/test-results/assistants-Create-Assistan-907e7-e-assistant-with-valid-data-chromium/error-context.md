@@ -1,0 +1,88 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "AI-Across" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - generic [ref=e11]: AI-Across
+        - button [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+      - navigation [ref=e15]:
+        - link "Dashboard" [ref=e16] [cursor=pointer]:
+          - /url: /
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - link "Assistants" [ref=e23] [cursor=pointer]:
+          - /url: /assistants
+          - img [ref=e24]
+          - generic [ref=e27]: Assistants
+        - link "Chat" [ref=e28] [cursor=pointer]:
+          - /url: /chat
+          - img [ref=e29]
+          - generic [ref=e31]: Chat
+        - link "Settings" [ref=e32] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e33]
+          - generic [ref=e36]: Settings
+      - paragraph [ref=e38]: AI-Across v1.0
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - heading "New Assistant" [level=1] [ref=e42]
+        - button "Back" [ref=e43] [cursor=pointer]:
+          - img [ref=e44]
+          - text: Back
+        - button [ref=e46] [cursor=pointer]:
+          - img [ref=e47]
+      - generic [ref=e50]:
+        - heading "Start from a Template" [level=2] [ref=e52]
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - heading "Create Custom Assistant" [level=3] [ref=e77]
+            - paragraph [ref=e78]: Build your own assistant from scratch
+          - generic [ref=e80]:
+            - generic [ref=e81]:
+              - text: Name *
+              - textbox "Name *" [ref=e82]:
+                - /placeholder: My Assistant
+                - text: Test Assistant
+            - generic [ref=e83]:
+              - text: Description
+              - textbox "Description" [ref=e84]:
+                - /placeholder: A brief description of what this assistant does
+            - generic [ref=e85]:
+              - text: Instructions *
+              - textbox "Instructions *" [active] [ref=e86]:
+                - /placeholder: You are a helpful assistant that...
+                - text: You are a helpful test assistant.
+            - generic [ref=e87]:
+              - text: Model
+              - generic [ref=e88]:
+                - combobox "Model" [ref=e89]:
+                  - option "Claude 3.5 Sonnet" [selected]
+                  - option "Claude 3 Opus"
+                  - option "GPT-4 Turbo"
+                  - option "GPT-4o"
+                  - option "Gemini Pro 1.5"
+                  - option "Llama 3 70B"
+                - img
+            - generic [ref=e90]:
+              - generic [ref=e91]:
+                - generic [ref=e92]: Temperature
+                - generic [ref=e93]: "0.7"
+              - slider [ref=e95] [cursor=pointer]: "0.7"
+              - paragraph [ref=e96]: Higher values make output more random, lower values more deterministic
+            - generic [ref=e97]:
+              - generic [ref=e98]:
+                - generic [ref=e99]: Max Tokens
+                - generic [ref=e100]: "4096"
+              - slider [ref=e102] [cursor=pointer]: "4096"
+              - paragraph [ref=e103]: Maximum number of tokens in the response
+            - generic [ref=e104]:
+              - button "Cancel" [ref=e105] [cursor=pointer]
+              - button "Create" [ref=e106] [cursor=pointer]
+```

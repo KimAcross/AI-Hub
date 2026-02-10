@@ -1,0 +1,94 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "AI-Across" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - generic [ref=e11]: AI-Across
+        - button [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+      - navigation [ref=e15]:
+        - link "Dashboard" [ref=e16] [cursor=pointer]:
+          - /url: /
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - link "Assistants" [ref=e23] [cursor=pointer]:
+          - /url: /assistants
+          - img [ref=e24]
+          - generic [ref=e27]: Assistants
+        - link "Chat" [ref=e28] [cursor=pointer]:
+          - /url: /chat
+          - img [ref=e29]
+          - generic [ref=e31]: Chat
+        - link "Settings" [ref=e32] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e33]
+          - generic [ref=e36]: Settings
+      - paragraph [ref=e38]: AI-Across v1.0
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - heading "Dashboard" [level=1] [ref=e42]
+        - link "New Assistant" [ref=e43] [cursor=pointer]:
+          - /url: /assistants/new
+          - img [ref=e44]
+          - text: New Assistant
+        - button [ref=e45] [cursor=pointer]:
+          - img [ref=e46]
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - generic [ref=e51]:
+              - heading "Assistants" [level=3] [ref=e52]
+              - img [ref=e53]
+            - generic [ref=e56]:
+              - generic [ref=e57]: "0"
+              - paragraph [ref=e58]: Active assistants
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - heading "Knowledge Files" [level=3] [ref=e61]
+              - img [ref=e62]
+            - generic [ref=e65]:
+              - generic [ref=e66]: "0"
+              - paragraph [ref=e67]: Uploaded documents
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - heading "Conversations" [level=3] [ref=e70]
+              - img [ref=e71]
+            - generic [ref=e73]:
+              - generic [ref=e74]: "-"
+              - paragraph [ref=e75]: Active chats
+        - generic [ref=e77]:
+          - heading "Recent Assistants" [level=2] [ref=e78]
+          - link "View All" [ref=e79] [cursor=pointer]:
+            - /url: /assistants
+            - text: View All
+            - img [ref=e80]
+        - generic [ref=e113]:
+          - heading "Quick Actions" [level=2] [ref=e114]
+          - generic [ref=e115]:
+            - link "Create Assistant Build a new AI assistant" [ref=e117] [cursor=pointer]:
+              - /url: /assistants/new
+              - img [ref=e118]
+              - heading "Create Assistant" [level=3] [ref=e119]
+              - paragraph [ref=e120]: Build a new AI assistant
+            - link "Use Template Start from a template" [ref=e122] [cursor=pointer]:
+              - /url: /assistants/templates
+              - img [ref=e123]
+              - heading "Use Template" [level=3] [ref=e126]
+              - paragraph [ref=e127]: Start from a template
+            - link "Start Chat Begin a conversation" [ref=e129] [cursor=pointer]:
+              - /url: /chat
+              - img [ref=e130]
+              - heading "Start Chat" [level=3] [ref=e132]
+              - paragraph [ref=e133]: Begin a conversation
+            - link "Settings Configure the app" [ref=e135] [cursor=pointer]:
+              - /url: /settings
+              - img [ref=e136]
+              - heading "Settings" [level=3] [ref=e139]
+              - paragraph [ref=e140]: Configure the app
+```

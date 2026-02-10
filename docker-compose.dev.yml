@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: aiacross-db
+    environment:
+      POSTGRES_USER: aiacross
+      POSTGRES_PASSWORD: aiacross
+      POSTGRES_DB: aiacross
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aiacross -d aiacross"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile.dev
+    container_name: aiacross-backend
+    volumes:
+      - ./backend:/app
+      - backend_uploads:/app/data/uploads
+      - backend_chroma:/app/data/chroma
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://aiacross:aiacross@db:5432/aiacross
+      - CHROMA_PERSIST_DIR=/app/data/chroma
+      - UPLOAD_DIR=/app/data/uploads
+      - DEBUG=true
+      - APP_ENV=development
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile.dev
+    container_name: aiacross-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  backend_uploads:
+  backend_chroma:

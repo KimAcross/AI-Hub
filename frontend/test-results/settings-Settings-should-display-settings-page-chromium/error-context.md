@@ -1,0 +1,93 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - link "AI-Across" [ref=e7] [cursor=pointer]:
+          - /url: /
+          - img [ref=e8]
+          - generic [ref=e11]: AI-Across
+        - button [ref=e12] [cursor=pointer]:
+          - img [ref=e13]
+      - navigation [ref=e15]:
+        - link "Dashboard" [ref=e16] [cursor=pointer]:
+          - /url: /
+          - img [ref=e17]
+          - generic [ref=e22]: Dashboard
+        - link "Assistants" [ref=e23] [cursor=pointer]:
+          - /url: /assistants
+          - img [ref=e24]
+          - generic [ref=e27]: Assistants
+        - link "Chat" [ref=e28] [cursor=pointer]:
+          - /url: /chat
+          - img [ref=e29]
+          - generic [ref=e31]: Chat
+        - link "Settings" [ref=e32] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e33]
+          - generic [ref=e36]: Settings
+      - paragraph [ref=e38]: AI-Across v1.0
+  - main [ref=e39]:
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - heading "Settings" [level=1] [ref=e42]
+        - button [ref=e43] [cursor=pointer]:
+          - img [ref=e44]
+      - generic [ref=e47]:
+        - generic [ref=e49]:
+          - generic [ref=e50]:
+            - img [ref=e51]
+            - heading "OpenRouter API Key" [level=3] [ref=e55]
+          - paragraph [ref=e56]:
+            - text: Configure your OpenRouter API key to enable AI model access. Get your API key from
+            - link "openrouter.ai/keys" [ref=e57] [cursor=pointer]:
+              - /url: https://openrouter.ai/keys
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - img [ref=e65]
+              - heading "Appearance" [level=3] [ref=e71]
+            - paragraph [ref=e72]: Customize the look and feel of the application
+          - generic [ref=e74]:
+            - text: Theme
+            - generic [ref=e75]:
+              - combobox "Theme" [ref=e76]:
+                - option "Light"
+                - option "Dark"
+                - option "System" [selected]
+              - img
+            - paragraph [ref=e77]: Select your preferred color theme. System will follow your OS settings.
+        - generic [ref=e79]:
+          - generic [ref=e80]:
+            - img [ref=e81]
+            - heading "Default Model" [level=3] [ref=e84]
+          - paragraph [ref=e85]: Choose the default AI model for new conversations
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - img [ref=e92]
+            - heading "Language" [level=3] [ref=e95]
+          - paragraph [ref=e96]: Choose your preferred language for the interface
+        - generic [ref=e101]:
+          - generic [ref=e102]:
+            - img [ref=e103]
+            - heading "Chat Settings" [level=3] [ref=e105]
+          - paragraph [ref=e106]: Configure how the chat interface behaves
+        - generic [ref=e112]:
+          - generic [ref=e113]:
+            - img [ref=e114]
+            - heading "System Information" [level=3] [ref=e116]
+          - paragraph [ref=e117]: View system configuration and limits
+        - generic [ref=e122]:
+          - generic [ref=e124]:
+            - img [ref=e125]
+            - heading "About AI-Across" [level=3] [ref=e128]
+          - generic [ref=e130]:
+            - generic [ref=e131]:
+              - generic [ref=e132]: Version
+              - generic [ref=e133]: 1.0.0-beta
+            - generic [ref=e134]:
+              - generic [ref=e135]: Phase
+              - generic [ref=e136]: 6 - Polish & QA
+```

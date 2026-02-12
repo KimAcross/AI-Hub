@@ -58,15 +58,16 @@ class ConversationService:
         Raises:
             AssistantNotFoundError: If assistant doesn't exist.
         """
-        # Verify assistant exists
-        result = await self.db.execute(
-            select(Assistant)
-            .where(Assistant.id == data.assistant_id)
-            .where(Assistant.is_deleted == False)  # noqa: E712
-        )
-        assistant = result.scalar_one_or_none()
-        if not assistant:
-            raise AssistantNotFoundError(str(data.assistant_id))
+        # Verify assistant exists (if provided)
+        if data.assistant_id:
+            result = await self.db.execute(
+                select(Assistant)
+                .where(Assistant.id == data.assistant_id)
+                .where(Assistant.is_deleted == False)  # noqa: E712
+            )
+            assistant = result.scalar_one_or_none()
+            if not assistant:
+                raise AssistantNotFoundError(str(data.assistant_id))
 
         conversation = Conversation(
             assistant_id=data.assistant_id,
@@ -331,18 +332,18 @@ class ConversationService:
         # Get conversation with assistant
         conversation = await self.get_conversation(conversation_id)
 
-        if not conversation.assistant:
-            yield {"type": "error", "error": "Assistant not found for this conversation"}
-            return
-
         assistant = conversation.assistant
 
         # Set context variables for log correlation
         conversation_id_var.set(str(conversation_id))
-        assistant_id_var.set(str(assistant.id))
+        if assistant:
+            assistant_id_var.set(str(assistant.id))
         logger.info(
             "Sending message",
-            extra={"model": assistant.model, "assistant_name": assistant.name},
+            extra={
+                "model": assistant.model if assistant else model_override,
+                "assistant_name": assistant.name if assistant else "Direct Chat",
+            },
         )
 
         # Check quota before proceeding
@@ -378,20 +379,23 @@ class ConversationService:
         # Build message history for the API
         messages_for_api: list[dict[str, str]] = []
 
-        # Get RAG-augmented system prompt with per-assistant guardrails
-        try:
-            system_prompt, retrieved_chunks = await self.rag.get_augmented_prompt(
-                assistant_id=assistant.id,
-                assistant_name=assistant.name,
-                assistant_instructions=assistant.instructions,
-                user_query=content,
-                top_k=getattr(assistant, "max_retrieval_chunks", None),
-                max_context_tokens=getattr(assistant, "max_context_tokens", None),
-            )
-        except Exception:
-            # Fallback to simple prompt if RAG fails
-            system_prompt = f"You are {assistant.name}.\n\n{assistant.instructions}"
-            retrieved_chunks = []
+        if assistant:
+            # Get RAG-augmented system prompt with per-assistant guardrails
+            try:
+                system_prompt, retrieved_chunks = await self.rag.get_augmented_prompt(
+                    assistant_id=assistant.id,
+                    assistant_name=assistant.name,
+                    assistant_instructions=assistant.instructions,
+                    user_query=content,
+                    top_k=getattr(assistant, "max_retrieval_chunks", None),
+                    max_context_tokens=getattr(assistant, "max_context_tokens", None),
+                )
+            except Exception:
+                # Fallback to simple prompt if RAG fails
+                system_prompt = f"You are {assistant.name}.\n\n{assistant.instructions}"
+        else:
+            # No assistant — use a generic system prompt
+            system_prompt = "You are a helpful AI assistant."
 
         messages_for_api.append({"role": "system", "content": system_prompt})
 
@@ -407,7 +411,10 @@ class ConversationService:
         messages_for_api.append({"role": "user", "content": content})
 
         # Determine which model to use
-        model = model_override or assistant.model
+        default_model = "anthropic/claude-3.5-sonnet"
+        model = model_override or (assistant.model if assistant else default_model)
+        temperature = float(assistant.temperature) if assistant else 0.7
+        max_tokens = assistant.max_tokens if assistant else 4096
 
         # Create placeholder for assistant message
         assistant_message = await self.add_message(
@@ -430,8 +437,8 @@ class ConversationService:
             async for chunk in self.openrouter.stream_chat_completion(
                 messages=messages_for_api,
                 model=model,
-                temperature=float(assistant.temperature),
-                max_tokens=assistant.max_tokens,
+                temperature=temperature,
+                max_tokens=max_tokens,
             ):
                 if chunk["type"] == "content":
                     full_content += chunk["content"]
@@ -443,7 +450,7 @@ class ConversationService:
                     tokens_used = chunk.get("tokens_used")
 
                     # Log usage if we have token data
-                    if tokens_used:
+                    if tokens_used and assistant:
                         from app.services.usage_log_service import UsageLogService
 
                         usage_service = UsageLogService(self.db, self.openrouter)

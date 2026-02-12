@@ -16,10 +16,6 @@ import {
 } from '@/hooks'
 import { useAppStore } from '@/stores/app-store'
 import { conversationsApi } from '@/lib/api'
-import { Bot, FileText } from 'lucide-react'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Skeleton } from '@/components/ui/skeleton'
 import { Header } from '@/components/layout/header'
 import toast from 'react-hot-toast'
 import type { Message } from '@/types'
@@ -50,7 +46,7 @@ export function ChatPage() {
   const activeAssistantId = assistantIdParam || selectedAssistantId
 
   // Queries
-  const { data: assistants = [], isLoading: isLoadingAssistants } = useAssistants()
+  const { data: assistants = [] } = useAssistants()
   const activeAssistants = assistants.filter((a) => !a.is_deleted)
 
   const { data: conversations = [], isLoading: isLoadingConversations } = useConversations(
@@ -113,18 +109,13 @@ export function ChatPage() {
 
   // Handle send message
   const handleSendMessage = async (content: string) => {
-    if (!activeAssistantId) {
-      toast.error('Please select an assistant first')
-      return
-    }
-
     let conversationId = selectedConversationId
 
     // Create conversation if needed
     if (!conversationId) {
       try {
         const newConversation = await createConversation.mutateAsync({
-          assistant_id: activeAssistantId,
+          ...(activeAssistantId ? { assistant_id: activeAssistantId } : {}),
           title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
         })
         conversationId = newConversation.id
@@ -319,87 +310,6 @@ export function ChatPage() {
 
   // Messages from conversation
   const messages = conversation?.messages || []
-
-  // Show assistant picker when no assistant is selected
-  if (!activeAssistantId) {
-    return (
-      <div className="flex flex-col h-screen">
-        <Header title="Chat" />
-        <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-auto">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 mb-4">
-            <Bot className="h-8 w-8 text-primary" />
-          </div>
-          <h2 className="text-xl font-semibold mb-2">Choose an Assistant</h2>
-          <p className="text-muted-foreground mb-8 text-center max-w-md">
-            Select an assistant to start a conversation
-          </p>
-
-          {isLoadingAssistants ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full max-w-4xl">
-              {[1, 2, 3].map((i) => (
-                <Card key={i}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <div className="flex-1">
-                        <Skeleton className="h-4 w-32 mb-2" />
-                        <Skeleton className="h-3 w-24" />
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-4 w-full mb-2" />
-                    <Skeleton className="h-4 w-2/3" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : activeAssistants.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full max-w-4xl">
-              {activeAssistants.map((a) => (
-                <Card
-                  key={a.id}
-                  className="cursor-pointer transition-shadow hover:shadow-md"
-                  onClick={() => handleSelectAssistant(a.id)}
-                >
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                        {a.avatar_url ? (
-                          <img src={a.avatar_url} alt={a.name} className="h-10 w-10 rounded-full object-cover" />
-                        ) : (
-                          <Bot className="h-5 w-5 text-primary" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold truncate">{a.name}</h3>
-                        <Badge variant="secondary" className="text-xs">
-                          {a.model.split('/').pop()}
-                        </Badge>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    {a.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mb-2">{a.description}</p>
-                    )}
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <FileText className="h-3.5 w-3.5" />
-                      <span>{a.files_count ?? 0} files</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center">
-              <p className="text-muted-foreground">No assistants available yet.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex h-screen">

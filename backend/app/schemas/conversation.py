@@ -56,7 +56,7 @@ class ConversationBase(BaseModel):
 class ConversationCreate(ConversationBase):
     """Schema for creating a new conversation."""
 
-    assistant_id: UUID
+    assistant_id: Optional[UUID] = None
 
 
 class ConversationUpdate(BaseModel):

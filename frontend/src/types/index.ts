@@ -79,7 +79,7 @@ export interface Conversation {
 }
 
 export interface ConversationCreate {
-  assistant_id: string
+  assistant_id?: string
   title?: string
 }
 

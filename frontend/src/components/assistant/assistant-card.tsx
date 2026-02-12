@@ -18,6 +18,7 @@ interface AssistantCardProps {
 export const AssistantCard = React.memo(function AssistantCard({ assistant, onEdit, onDelete, onRestore }: AssistantCardProps) {
   const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = React.useState(false)
+  const hasMenuActions = !!(onEdit || onDelete || onRestore)
 
   return (
     <Card className={cn(
@@ -46,72 +47,78 @@ export const AssistantCard = React.memo(function AssistantCard({ assistant, onEd
             </div>
           </Link>
 
-          <div className="relative">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <MoreVertical className="h-4 w-4" />
-            </Button>
+          {hasMenuActions && (
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setMenuOpen(!menuOpen)}
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
 
-            {menuOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-10"
-                  onClick={() => setMenuOpen(false)}
-                />
-                <div className="absolute right-0 top-8 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
-                  {!assistant.is_deleted ? (
-                    <>
+              {menuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-8 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
+                    {!assistant.is_deleted ? (
+                      <>
+                        <button
+                          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                          onClick={() => {
+                            setMenuOpen(false)
+                            navigate(`/chat?assistant=${assistant.id}`)
+                          }}
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                          Start Chat
+                        </button>
+                        {onEdit && (
+                          <button
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                            onClick={() => {
+                              setMenuOpen(false)
+                              onEdit()
+                            }}
+                          >
+                            <Edit className="h-4 w-4" />
+                            Edit
+                          </button>
+                        )}
+                        {onDelete && (
+                          <button
+                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-accent"
+                            onClick={() => {
+                              setMenuOpen(false)
+                              onDelete()
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </button>
+                        )}
+                      </>
+                    ) : onRestore ? (
                       <button
                         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
                         onClick={() => {
                           setMenuOpen(false)
-                          navigate(`/chat?assistant=${assistant.id}`)
+                          onRestore()
                         }}
                       >
-                        <MessageSquare className="h-4 w-4" />
-                        Start Chat
+                        <RotateCcw className="h-4 w-4" />
+                        Restore
                       </button>
-                      <button
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                        onClick={() => {
-                          setMenuOpen(false)
-                          onEdit?.()
-                        }}
-                      >
-                        <Edit className="h-4 w-4" />
-                        Edit
-                      </button>
-                      <button
-                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-accent"
-                        onClick={() => {
-                          setMenuOpen(false)
-                          onDelete?.()
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                      onClick={() => {
-                        setMenuOpen(false)
-                        onRestore?.()
-                      }}
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                      Restore
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+                    ) : null}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </CardHeader>
 

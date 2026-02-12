@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,6 +25,7 @@ interface AssistantFormProps {
 }
 
 export function AssistantForm({ assistant, onSubmit, onCancel, isLoading }: AssistantFormProps) {
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const {
     register,
     handleSubmit,
@@ -38,6 +40,8 @@ export function AssistantForm({ assistant, onSubmit, onCancel, isLoading }: Assi
       model: assistant.model,
       temperature: assistant.temperature,
       max_tokens: assistant.max_tokens,
+      max_retrieval_chunks: assistant.max_retrieval_chunks ?? 5,
+      max_context_tokens: assistant.max_context_tokens ?? 4000,
     } : {
       name: '',
       description: '',
@@ -45,11 +49,15 @@ export function AssistantForm({ assistant, onSubmit, onCancel, isLoading }: Assi
       model: 'anthropic/claude-3.5-sonnet',
       temperature: 0.7,
       max_tokens: 4096,
+      max_retrieval_chunks: 5,
+      max_context_tokens: 4000,
     },
   })
 
   const temperature = watch('temperature')
   const maxTokens = watch('max_tokens')
+  const maxRetrievalChunks = watch('max_retrieval_chunks')
+  const maxContextTokens = watch('max_context_tokens')
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -128,6 +136,58 @@ export function AssistantForm({ assistant, onSubmit, onCancel, isLoading }: Assi
         <p className="text-xs text-muted-foreground">
           Maximum number of tokens in the response
         </p>
+      </div>
+
+      <div className="border-t pt-4">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          {showAdvanced ? 'Hide' : 'Show'} Advanced: RAG Settings
+        </button>
+
+        {showAdvanced && (
+          <div className="mt-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Controls how much knowledge base content is included in prompts
+            </p>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Max Retrieval Chunks</Label>
+                <span className="text-sm text-muted-foreground">{maxRetrievalChunks}</span>
+              </div>
+              <Slider
+                value={maxRetrievalChunks}
+                min={1}
+                max={20}
+                step={1}
+                onChange={(value) => setValue('max_retrieval_chunks', value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Maximum number of knowledge base chunks to retrieve per query
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Max Context Tokens</Label>
+                <span className="text-sm text-muted-foreground">{maxContextTokens?.toLocaleString()}</span>
+              </div>
+              <Slider
+                value={maxContextTokens}
+                min={500}
+                max={32000}
+                step={500}
+                onChange={(value) => setValue('max_context_tokens', value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Maximum tokens of knowledge base context included in each prompt
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end gap-3 pt-4">

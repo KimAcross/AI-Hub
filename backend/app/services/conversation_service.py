@@ -12,6 +12,7 @@ from app.core.exceptions import (
     ConversationNotFoundError,
     QuotaExceededError,
 )
+from app.core.logging import assistant_id_var, conversation_id_var, get_logger
 from app.models.assistant import Assistant
 from app.models.conversation import Conversation
 from app.models.message import Message
@@ -24,6 +25,8 @@ from app.schemas.conversation import (
 )
 from app.services.openrouter_service import OpenRouterService, get_openrouter_service
 from app.services.rag_service import RAGService, get_rag_service
+
+logger = get_logger(__name__)
 
 
 class ConversationService:
@@ -72,7 +75,7 @@ class ConversationService:
         )
         self.db.add(conversation)
         await self.db.flush()
-        await self.db.refresh(conversation)
+        await self.db.refresh(conversation, ["messages"])
         return conversation
 
     async def get_conversation(
@@ -179,7 +182,7 @@ class ConversationService:
             setattr(conversation, field, value)
 
         await self.db.flush()
-        await self.db.refresh(conversation)
+        await self.db.refresh(conversation, ["messages"])
         return conversation
 
     async def delete_conversation(self, conversation_id: uuid.UUID) -> None:
@@ -270,6 +273,45 @@ class ConversationService:
             raise ConversationNotFoundError(f"Message not found: {message_id}")
         return message
 
+    async def submit_feedback(
+        self,
+        message_id: uuid.UUID,
+        feedback: str,
+        reason: Optional[str] = None,
+    ) -> Message:
+        """Submit feedback on an assistant message.
+
+        Args:
+            message_id: UUID of the message.
+            feedback: "positive" or "negative".
+            reason: Optional reason text.
+
+        Returns:
+            Updated message.
+        """
+        message = await self.get_message(message_id)
+
+        if message.role != "assistant":
+            raise ConversationNotFoundError("Feedback can only be submitted on assistant messages")
+
+        message.feedback = feedback
+        message.feedback_reason = reason
+        message.feedback_context = {
+            "model": message.model,
+        }
+
+        await self.db.flush()
+        await self.db.refresh(message)
+        logger.info(
+            "Feedback submitted",
+            extra={
+                "message_id": str(message_id),
+                "feedback": feedback,
+                "model": message.model,
+            },
+        )
+        return message
+
     async def send_message(
         self,
         conversation_id: uuid.UUID,
@@ -295,6 +337,14 @@ class ConversationService:
 
         assistant = conversation.assistant
 
+        # Set context variables for log correlation
+        conversation_id_var.set(str(conversation_id))
+        assistant_id_var.set(str(assistant.id))
+        logger.info(
+            "Sending message",
+            extra={"model": assistant.model, "assistant_name": assistant.name},
+        )
+
         # Check quota before proceeding
         try:
             from app.services.quota_service import get_quota_service
@@ -303,6 +353,7 @@ class ConversationService:
             quota_result = await quota_service.check_quota()
 
             if not quota_result.allowed:
+                logger.warning("Quota exceeded", extra={"reason": quota_result.reason})
                 yield {
                     "type": "error",
                     "error": f"Usage limit exceeded: {quota_result.reason}",
@@ -310,10 +361,7 @@ class ConversationService:
                 }
                 return
         except Exception as e:
-            # Log but don't block if quota check fails
-            import logging
-
-            logging.getLogger(__name__).warning(f"Quota check failed: {e}")
+            logger.warning(f"Quota check failed: {e}")
 
         # Save user message
         user_message = await self.add_message(
@@ -330,13 +378,15 @@ class ConversationService:
         # Build message history for the API
         messages_for_api: list[dict[str, str]] = []
 
-        # Get RAG-augmented system prompt
+        # Get RAG-augmented system prompt with per-assistant guardrails
         try:
             system_prompt, retrieved_chunks = await self.rag.get_augmented_prompt(
                 assistant_id=assistant.id,
                 assistant_name=assistant.name,
                 assistant_instructions=assistant.instructions,
                 user_query=content,
+                top_k=getattr(assistant, "max_retrieval_chunks", None),
+                max_context_tokens=getattr(assistant, "max_context_tokens", None),
             )
         except Exception:
             # Fallback to simple prompt if RAG fails
@@ -455,15 +505,7 @@ class ConversationService:
             assistant_name = conversation.assistant.name
 
         messages = [
-            MessageResponse(
-                id=msg.id,
-                conversation_id=msg.conversation_id,
-                role=msg.role,
-                content=msg.content,
-                model=msg.model,
-                tokens_used=msg.tokens_used,
-                created_at=msg.created_at,
-            )
+            message_to_response(msg)
             for msg in conversation.messages
         ]
 
@@ -500,4 +542,6 @@ def message_to_response(message: Message) -> MessageResponse:
         model=message.model,
         tokens_used=message.tokens_used,
         created_at=message.created_at,
+        feedback=message.feedback,
+        feedback_reason=message.feedback_reason,
     )

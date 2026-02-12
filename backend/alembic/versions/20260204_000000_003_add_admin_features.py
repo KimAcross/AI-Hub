@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column(
             "role",
-            sa.Enum("admin", "manager", "user", name="userrole"),
+            postgresql.ENUM("admin", "manager", "user", name="userrole", create_type=False),
             nullable=False,
             server_default="user",
         ),
@@ -105,7 +105,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "provider",
-            sa.Enum("openrouter", "openai", "anthropic", "google", "azure", "custom", name="apikeyprovider"),
+            postgresql.ENUM("openrouter", "openai", "anthropic", "google", "azure", "custom", name="apikeyprovider", create_type=False),
             nullable=False,
         ),
         sa.Column("name", sa.String(length=100), nullable=False),
@@ -127,7 +127,7 @@ def upgrade() -> None:
         sa.Column("last_tested_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "test_status",
-            sa.Enum("valid", "invalid", "untested", name="apikeystatus"),
+            postgresql.ENUM("valid", "invalid", "untested", name="apikeystatus", create_type=False),
             nullable=False,
             server_default="untested",
         ),
@@ -167,7 +167,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "scope",
-            sa.Enum("global", "user", name="quotascope"),
+            postgresql.ENUM("global", "user", name="quotascope", create_type=False),
             nullable=False,
             server_default="global",
         ),

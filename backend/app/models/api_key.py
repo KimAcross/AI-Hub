@@ -42,7 +42,7 @@ class APIKey(Base):
         default=uuid.uuid4,
     )
     provider: Mapped[APIKeyProvider] = mapped_column(
-        Enum(APIKeyProvider),
+        Enum(APIKeyProvider, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -67,7 +67,7 @@ class APIKey(Base):
         nullable=True,
     )
     test_status: Mapped[APIKeyStatus] = mapped_column(
-        Enum(APIKeyStatus),
+        Enum(APIKeyStatus, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         default=APIKeyStatus.UNTESTED,
     )

@@ -7,11 +7,15 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     gcc \
     libpq-dev \
+    libmagic1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+# Replace python-magic-bin (Windows) with python-magic (Linux)
 COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN sed -i 's/python-magic-bin>=0.4.14/python-magic>=0.4.27/' requirements.txt && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY backend/ .

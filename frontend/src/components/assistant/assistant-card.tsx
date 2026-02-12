@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
-import { Bot, FileText, MoreVertical, Trash2, RotateCcw, Edit } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Bot, FileText, MessageSquare, MoreVertical, Trash2, RotateCcw, Edit } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +16,7 @@ interface AssistantCardProps {
 }
 
 export const AssistantCard = React.memo(function AssistantCard({ assistant, onEdit, onDelete, onRestore }: AssistantCardProps) {
+  const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = React.useState(false)
 
   return (
@@ -63,6 +65,16 @@ export const AssistantCard = React.memo(function AssistantCard({ assistant, onEd
                 <div className="absolute right-0 top-8 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
                   {!assistant.is_deleted ? (
                     <>
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          navigate(`/chat?assistant=${assistant.id}`)
+                        }}
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Start Chat
+                      </button>
                       <button
                         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
                         onClick={() => {

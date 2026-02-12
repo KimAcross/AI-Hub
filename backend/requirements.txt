@@ -1,8 +1,9 @@
 # Core Framework
 fastapi>=0.109.0
 uvicorn[standard]>=0.27.0
-pydantic>=2.5.0
+pydantic[email]>=2.5.0
 pydantic-settings>=2.1.0
+email-validator>=2.0.0
 
 # Database
 sqlalchemy[asyncio]>=2.0.25
@@ -26,6 +27,9 @@ slowapi>=0.1.9
 
 # File Validation
 python-magic-bin>=0.4.14  # Windows; use python-magic==0.4.27 in Docker
+
+# Logging
+python-json-logger>=2.0.0
 
 # Utilities
 python-dotenv>=1.0.0

@@ -2,7 +2,7 @@ import * as React from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
-import { Bot, User, Copy, Check, RefreshCw, Pencil } from 'lucide-react'
+import { Bot, User, Copy, Check, RefreshCw, Pencil, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import { CodeBlock } from './code-block'
 import type { Message } from '@/types'
@@ -13,6 +13,7 @@ interface MessageBubbleProps {
   onCopy?: () => void
   onRegenerate?: () => void
   onEdit?: () => void
+  onFeedback?: (feedback: 'positive' | 'negative', reason?: string) => void
   showActions?: boolean
 }
 
@@ -22,9 +23,12 @@ export const MessageBubble = React.memo(function MessageBubble({
   onCopy,
   onRegenerate,
   onEdit,
+  onFeedback,
   showActions = true,
 }: MessageBubbleProps) {
   const [copied, setCopied] = React.useState(false)
+  const [showReasonInput, setShowReasonInput] = React.useState(false)
+  const [reason, setReason] = React.useState('')
   const isUser = message.role === 'user'
 
   const handleCopy = async () => {
@@ -32,6 +36,22 @@ export const MessageBubble = React.memo(function MessageBubble({
     setCopied(true)
     onCopy?.()
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleFeedback = (type: 'positive' | 'negative') => {
+    if (type === 'negative' && !showReasonInput) {
+      setShowReasonInput(true)
+      return
+    }
+    onFeedback?.(type, type === 'negative' ? reason || undefined : undefined)
+    setShowReasonInput(false)
+    setReason('')
+  }
+
+  const handleReasonSubmit = () => {
+    onFeedback?.('negative', reason || undefined)
+    setShowReasonInput(false)
+    setReason('')
   }
 
   return (
@@ -162,6 +182,67 @@ export const MessageBubble = React.memo(function MessageBubble({
                 <RefreshCw className="h-4 w-4 text-muted-foreground" />
               </button>
             )}
+
+            {!isUser && onFeedback && (
+              <>
+                <button
+                  onClick={() => handleFeedback('positive')}
+                  className={cn(
+                    "p-1.5 rounded hover:bg-muted transition-colors",
+                    message.feedback === 'positive' && "bg-muted"
+                  )}
+                  title="Good response"
+                >
+                  <ThumbsUp className={cn(
+                    "h-4 w-4",
+                    message.feedback === 'positive'
+                      ? "text-green-500"
+                      : "text-muted-foreground"
+                  )} />
+                </button>
+                <button
+                  onClick={() => handleFeedback('negative')}
+                  className={cn(
+                    "p-1.5 rounded hover:bg-muted transition-colors",
+                    message.feedback === 'negative' && "bg-muted"
+                  )}
+                  title="Bad response"
+                >
+                  <ThumbsDown className={cn(
+                    "h-4 w-4",
+                    message.feedback === 'negative'
+                      ? "text-red-500"
+                      : "text-muted-foreground"
+                  )} />
+                </button>
+              </>
+            )}
+          </div>
+        )}
+
+        {showReasonInput && (
+          <div className="flex items-center gap-2 mt-1">
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="What was wrong? (optional)"
+              className="flex-1 text-sm px-2 py-1 rounded border bg-background"
+              onKeyDown={(e) => e.key === 'Enter' && handleReasonSubmit()}
+              autoFocus
+            />
+            <button
+              onClick={handleReasonSubmit}
+              className="text-sm px-2 py-1 rounded bg-primary text-primary-foreground hover:opacity-90"
+            >
+              Submit
+            </button>
+            <button
+              onClick={() => { setShowReasonInput(false); setReason('') }}
+              className="text-sm px-2 py-1 rounded hover:bg-muted text-muted-foreground"
+            >
+              Cancel
+            </button>
           </div>
         )}
 

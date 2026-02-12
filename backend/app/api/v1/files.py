@@ -1,10 +1,11 @@
 """File management API endpoints."""
 
-import logging
 import uuid
 from typing import Annotated
 
-logger = logging.getLogger(__name__)
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -82,7 +83,7 @@ async def upload_file(
     and vector storage.
     """
     # Verify assistant exists
-    assistant = await assistant_service.get(assistant_id)
+    assistant = await assistant_service.get_assistant(assistant_id)
     if not assistant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -133,7 +134,7 @@ async def list_files(
 ) -> FileListResponse:
     """Get all files uploaded to an assistant's knowledge base."""
     # Verify assistant exists
-    assistant = await assistant_service.get(assistant_id)
+    assistant = await assistant_service.get_assistant(assistant_id)
     if not assistant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -162,7 +163,7 @@ async def get_file(
 ) -> FileResponse:
     """Get details of a specific file."""
     # Verify assistant exists
-    assistant = await assistant_service.get(assistant_id)
+    assistant = await assistant_service.get_assistant(assistant_id)
     if not assistant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -198,7 +199,7 @@ async def delete_file(
     vector embeddings from ChromaDB.
     """
     # Verify assistant exists
-    assistant = await assistant_service.get(assistant_id)
+    assistant = await assistant_service.get_assistant(assistant_id)
     if not assistant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -236,7 +237,7 @@ async def reprocess_file(
     the embedding model has been updated.
     """
     # Verify assistant exists
-    assistant = await assistant_service.get(assistant_id)
+    assistant = await assistant_service.get_assistant(assistant_id)
     if not assistant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -138,6 +138,7 @@ async def verify_user_token(
         HTTPException: If token is missing or invalid.
     """
     from app.services.admin_auth_service import get_admin_auth_service
+    from app.services.user_auth_service import UserAuthService
 
     if not x_admin_token:
         raise HTTPException(
@@ -145,20 +146,35 @@ async def verify_user_token(
             detail="Authentication token required",
         )
 
-    auth_service = get_admin_auth_service()
-    payload = auth_service.verify_token(x_admin_token)
+    # Try admin token first (sub="admin")
+    admin_service = get_admin_auth_service()
+    payload = admin_service.verify_token(x_admin_token)
 
-    if not payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-        )
-
-    # For legacy admin tokens, set role to admin
-    if payload.get("sub") == "admin":
+    if payload:
+        # Legacy admin token — set role to admin
         payload["role"] = UserRole.ADMIN.value
+        return payload
 
-    return payload
+    # Try user token (sub=<user-uuid>)
+    try:
+        from jose import jwt as jose_jwt
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        user_payload = jose_jwt.decode(
+            x_admin_token,
+            settings.secret_key,
+            algorithms=[UserAuthService.ALGORITHM],
+        )
+        if user_payload.get("sub") and user_payload.get("sub") != "admin":
+            return user_payload
+    except Exception:
+        pass
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired token",
+    )
 
 
 async def require_role(

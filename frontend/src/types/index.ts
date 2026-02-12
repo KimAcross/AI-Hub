@@ -7,6 +7,8 @@ export interface Assistant {
   model: string
   temperature: number
   max_tokens: number
+  max_retrieval_chunks: number
+  max_context_tokens: number
   avatar_url: string | null
   is_deleted: boolean
   created_at: string
@@ -21,6 +23,8 @@ export interface AssistantCreate {
   model?: string
   temperature?: number
   max_tokens?: number
+  max_retrieval_chunks?: number
+  max_context_tokens?: number
   avatar_url?: string | null
 }
 
@@ -31,6 +35,8 @@ export interface AssistantUpdate {
   model?: string
   temperature?: number
   max_tokens?: number
+  max_retrieval_chunks?: number
+  max_context_tokens?: number
   avatar_url?: string | null
 }
 
@@ -73,7 +79,7 @@ export interface Conversation {
 }
 
 export interface ConversationCreate {
-  assistant_id?: string | null
+  assistant_id: string
   title?: string
 }
 
@@ -89,6 +95,8 @@ export interface Message {
     total_tokens?: number
   } | null
   created_at: string
+  feedback?: 'positive' | 'negative' | null
+  feedback_reason?: string | null
 }
 
 export interface MessageCreate {

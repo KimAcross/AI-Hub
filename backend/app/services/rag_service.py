@@ -186,6 +186,7 @@ If the reference materials don't contain relevant information, rely on your gene
         user_query: str,
         top_k: Optional[int] = None,
         threshold: Optional[float] = None,
+        max_context_tokens: Optional[int] = None,
     ) -> tuple[str, list[RetrievedChunk]]:
         """Get a system prompt augmented with relevant context.
 
@@ -196,6 +197,7 @@ If the reference materials don't contain relevant information, rely on your gene
             user_query: The user's query to find context for.
             top_k: Number of results to retrieve.
             threshold: Similarity threshold.
+            max_context_tokens: Maximum tokens for context (per-assistant override).
 
         Returns:
             Tuple of (augmented system prompt, list of retrieved chunks).
@@ -208,8 +210,9 @@ If the reference materials don't contain relevant information, rely on your gene
             threshold=threshold,
         )
 
-        # Format the context
-        context = self.format_context(chunks)
+        # Format the context with per-assistant token limit
+        context_limit = max_context_tokens if max_context_tokens is not None else 4000
+        context = self.format_context(chunks, max_tokens=context_limit)
 
         # Build the system prompt
         system_prompt = self.build_system_prompt(

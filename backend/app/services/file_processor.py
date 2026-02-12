@@ -1,6 +1,5 @@
 """File processor service for handling file uploads and indexing."""
 
-import logging
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -12,14 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models.assistant import Assistant
+from app.core.logging import assistant_id_var, get_logger
 from app.models.knowledge_file import KnowledgeFile
 from app.services.chroma_service import ChromaService, get_chroma_service
 from app.services.embedding_service import EmbeddingService, get_embedding_service
 from app.utils.chunker import TextChunker, chunk_text
 from app.utils.file_extractors import extract_text, get_file_type, ALLOWED_EXTENSIONS
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 ALLOWED_MIME_TYPES = {
@@ -212,6 +211,23 @@ class FileProcessorService:
         if not file:
             return False
 
+        # Track processing start time for reaper detection
+        from datetime import datetime, timezone as tz
+
+        file.processing_started_at = datetime.now(tz.utc)
+        await self.db.flush()
+
+        assistant_id_var.set(str(file.assistant_id))
+        logger.info(
+            "Processing file",
+            extra={
+                "file_id": str(file_id),
+                "filename": file.filename,
+                "file_type": file.file_type,
+                "attempt": file.attempt_count + 1,
+            },
+        )
+
         try:
             # Update status to indexing
             await self.update_file_status(file_id, "indexing")
@@ -259,10 +275,20 @@ class FileProcessorService:
 
             # Update status to ready
             await self.update_file_status(file_id, "ready", chunk_count=len(chunks))
+            logger.info(
+                "File processing complete",
+                extra={"file_id": str(file_id), "chunk_count": len(chunks)},
+            )
 
             return True
 
         except Exception as e:
+            logger.error(
+                "File processing failed",
+                extra={"file_id": str(file_id), "error": str(e)[:200]},
+            )
+            # Store error for reaper visibility
+            file.last_error = str(e)[:500]
             # Clean up physical file on failure
             if file and file.file_path:
                 cleanup_path = Path(file.file_path)
@@ -402,7 +428,11 @@ class FileProcessorService:
             file_id=file_id,
         )
 
-        # Reset status
+        # Reset status and retry tracking for manual reprocess
+        file.attempt_count = 0
+        file.next_retry_at = None
+        file.last_error = None
+        file.processing_started_at = None
         await self.update_file_status(file_id, "processing")
 
         return True

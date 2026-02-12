@@ -39,6 +39,11 @@ class Message(Base):
         nullable=False,
     )
 
+    # Feedback fields
+    feedback: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    feedback_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    feedback_context: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+
     # Relationships
     conversation: Mapped["Conversation"] = relationship(
         "Conversation",

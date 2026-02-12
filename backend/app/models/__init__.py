@@ -10,6 +10,7 @@ from app.models.user_api_key import UserApiKey
 from app.models.api_key import APIKey, APIKeyProvider, APIKeyStatus
 from app.models.usage_quota import UsageQuota, QuotaScope
 from app.models.audit_log import AuditLog
+from app.models.workspace import Workspace
 
 __all__ = [
     "Assistant",
@@ -27,4 +28,5 @@ __all__ = [
     "UsageQuota",
     "QuotaScope",
     "AuditLog",
+    "Workspace",
 ]

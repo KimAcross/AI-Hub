@@ -40,7 +40,7 @@ class AssistantService:
         )
         self.db.add(assistant)
         await self.db.flush()
-        await self.db.refresh(assistant)
+        await self.db.refresh(assistant, ["knowledge_files"])
         return assistant
 
     async def create_from_template(self, template_id: str) -> Assistant:
@@ -102,7 +102,7 @@ class AssistantService:
             setattr(assistant, field, value)
 
         await self.db.flush()
-        await self.db.refresh(assistant)
+        await self.db.refresh(assistant, ["knowledge_files"])
         return assistant
 
     async def delete_assistant(self, assistant_id: UUID) -> None:
@@ -124,7 +124,7 @@ class AssistantService:
 
         assistant.is_deleted = False
         await self.db.flush()
-        await self.db.refresh(assistant)
+        await self.db.refresh(assistant, ["knowledge_files"])
         return assistant
 
     async def get_file_count(self, assistant_id: UUID) -> int:

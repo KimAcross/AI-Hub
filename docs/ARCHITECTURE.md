@@ -202,7 +202,8 @@ backend/
 │   │
 │   ├── core/
 │   │   ├── config.py            # Pydantic settings
-│   │   └── exceptions.py        # Custom exceptions
+│   │   ├── exceptions.py        # Custom exceptions
+│   │   └── logging.py           # Structured JSON logging + contextvars
 │   │
 │   ├── db/
 │   │   ├── base.py              # SQLAlchemy base model
@@ -218,7 +219,8 @@ backend/
 │   │   ├── user.py
 │   │   ├── api_key.py
 │   │   ├── usage_quota.py
-│   │   └── audit_log.py
+│   │   ├── audit_log.py
+│   │   └── workspace.py
 │   │
 │   ├── schemas/                 # Pydantic request/response
 │   │   ├── assistant.py
@@ -239,7 +241,8 @@ backend/
 │   │   ├── user_auth_service.py
 │   │   ├── api_key_service.py
 │   │   ├── quota_service.py
-│   │   └── audit_service.py
+│   │   ├── audit_service.py
+│   │   └── ingestion_reaper.py
 │   │
 │   ├── utils/                   # Utilities
 │   │   ├── chunker.py
@@ -350,13 +353,16 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 │ model               │       │ file_path           │
 │ temperature         │       │ size_bytes          │
 │ max_tokens          │       │ chunk_count         │
-│ avatar_url          │       │ status              │
-│ is_deleted          │       │ error_message       │
-│ created_at          │       │ created_at          │
-│ updated_at          │       └─────────────────────┘
-└─────────────────────┘
-          │
-          │
+│ max_retrieval_chunks│       │ status              │
+│ max_context_tokens  │       │ error_message       │
+│ avatar_url          │       │ processing_started_at│
+│ is_deleted          │       │ attempt_count       │
+│ workspace_id (FK)   │       │ max_attempts        │
+│ created_at          │       │ next_retry_at       │
+│ updated_at          │       │ last_error          │
+└─────────────────────┘       │ workspace_id (FK)   │
+          │                   │ created_at          │
+          │                   └─────────────────────┘
           ▼
 ┌─────────────────────┐       ┌─────────────────────┐
 │   conversations     │       │      messages       │
@@ -364,12 +370,23 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 │ id (PK)             │──────<│ id (PK)             │
 │ assistant_id (FK)   │       │ conversation_id (FK)│
 │ user_id (FK)        │       │ role                │
-│ title               │       │ content             │
-│ created_at          │       │ model               │
-│ updated_at          │       │ tokens_used (JSONB) │
-└─────────────────────┘       │                     │
+│ workspace_id (FK)   │       │ content             │
+│ title               │       │ model               │
+│ created_at          │       │ tokens_used (JSONB) │
+│ updated_at          │       │ feedback            │
+└─────────────────────┘       │ feedback_reason     │
+                              │ feedback_context    │
                               │ created_at          │
                               └─────────────────────┘
+
+┌─────────────────────┐
+│    workspaces       │
+├─────────────────────┤
+│ id (PK)             │
+│ name                │
+│ slug (unique)       │
+│ created_at          │
+└─────────────────────┘
 
 ┌─────────────────────┐
 │      settings       │
@@ -432,10 +449,11 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 
 | Table | Primary Key | Indexes | Relationships |
 |-------|-------------|---------|---------------|
-| assistants | UUID | - | Has many: files, conversations |
-| knowledge_files | UUID | assistant_id | Belongs to: assistant |
-| conversations | UUID | assistant_id, user_id, created_at | Belongs to: assistant, user; Has many: messages |
-| messages | UUID | conversation_id, created_at | Belongs to: conversation |
+| assistants | UUID | workspace_id | Has many: files, conversations. Belongs to: workspace |
+| knowledge_files | UUID | assistant_id, workspace_id | Belongs to: assistant, workspace |
+| conversations | UUID | assistant_id, user_id, workspace_id, created_at | Belongs to: assistant, user, workspace; Has many: messages |
+| messages | UUID | conversation_id, feedback, created_at | Belongs to: conversation |
+| workspaces | UUID | slug (unique) | Has many: assistants, conversations, knowledge_files |
 | settings | VARCHAR(100) | - | Standalone key-value |
 | users | UUID | email (unique) | Has many: audit_logs |
 | usage_logs | UUID | created_at | Belongs to: assistant, conversation |
@@ -493,7 +511,8 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 | Chunk Overlap | 50 tokens | Preserves context at boundaries |
 | Embedding Model | text-embedding-3-small | 1536 dimensions |
 | Embedding Dimension | 1536 | OpenAI standard |
-| Top-K | 5 | Number of chunks to retrieve |
+| Top-K | 5 (default, per-assistant configurable 1-20) | Number of chunks to retrieve |
+| Max Context Tokens | 4000 (default, per-assistant configurable 500-32000) | Token budget for retrieved context |
 | Similarity Threshold | 0.7 | Minimum relevance score |
 | Distance Metric | Cosine | Vector similarity measure |
 
@@ -683,12 +702,12 @@ data: {"type": "done", "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
 
 ### Volume Strategy
 
-| Volume | Purpose | Backup Required |
-|--------|---------|-----------------|
-| postgres_data | Database | Yes |
-| chroma_data | Vector embeddings | Yes |
-| uploads | User files | Yes |
-| nginx_certs | SSL certificates | No (regenerate) |
+| Volume | Purpose | Backup Required | Backed Up By |
+|--------|---------|-----------------|--------------|
+| postgres_data | Database | Yes | `docker/scripts/backup.sh` (pg_dump) |
+| chroma_data | Vector embeddings | Yes | `docker/scripts/backup.sh` (tar) |
+| uploads | User files | Yes | `docker/scripts/backup.sh` (tar) |
+| nginx_certs | SSL certificates | No | Regenerate via Let's Encrypt |
 
 ---
 
@@ -775,14 +794,16 @@ Single Server → Read Replicas → Horizontal Scaling
 
 ## Monitoring & Observability
 
-### Planned Instrumentation
+### Observability Stack
 
-| Layer | Tool | Metrics |
-|-------|------|---------|
-| Application | Prometheus | Request latency, error rates |
-| Database | pg_stat | Query performance, connections |
-| Infrastructure | Docker stats | CPU, memory, disk |
-| Logs | Structured JSON | Request traces, errors |
+| Layer | Tool | Status |
+|-------|------|--------|
+| Application Logs | Structured JSON (`python-json-logger`) with `request_id`, `user_id`, `conversation_id`, `assistant_id` | ✅ Implemented |
+| Request Tracing | `X-Request-ID` header on all responses, correlated across services via contextvars | ✅ Implemented |
+| Health Checks | `/health` (basic), `/ready` (with DB check) | ✅ Implemented |
+| Metrics | Prometheus (planned for v1.2 if operational need emerges) | Planned |
+| Database | pg_stat for query performance | Available |
+| Infrastructure | Docker stats for CPU, memory, disk | Available |
 
 ### Health Checks
 
@@ -790,6 +811,15 @@ Single Server → Read Replicas → Horizontal Scaling
 |----------|---------|----------|
 | `GET /api/v1/health` | Basic health check | `{"status": "healthy", "timestamp": "..."}` |
 | `GET /api/v1/ready` | Readiness with DB check | `{"status": "ready", "database": "connected"}` |
+
+### CI Pipeline
+
+GitHub Actions CI (`.github/workflows/ci.yml`) runs on every push to `main` and PR:
+
+| Job | Checks | Runner |
+|-----|--------|--------|
+| Backend | `ruff check`, `ruff format --check`, `alembic upgrade head`, `pytest` | ubuntu-latest + PostgreSQL 15 service |
+| Frontend | `npm run lint`, `npm run test:run`, `npm run build` | ubuntu-latest + Node 20 |
 
 ### Testing Infrastructure
 
@@ -825,6 +855,12 @@ Single Server → Read Replicas → Horizontal Scaling
 | v0.8.0 | Audit logging | ✅ Implemented — Action tracking |
 | v0.9.0 | User auth + conversation isolation | ✅ Implemented — JWT auth on all endpoints, user_id on conversations |
 | v0.9.0 | Security headers + MIME validation | ✅ Implemented — CSP, HSTS, magic byte validation |
+| v1.0.0 | Structured logging + request correlation | ✅ Implemented — JSON logs, X-Request-ID, contextvars |
+| v1.0.0 | Self-healing file ingestion | ✅ Implemented — Reaper task, exponential backoff retries |
+| v1.0.0 | Workspace isolation columns | ✅ Implemented — workspace_id on core tables, default workspace |
+| v1.0.0 | Per-assistant RAG guardrails | ✅ Implemented — max_retrieval_chunks, max_context_tokens |
+| v1.0.0 | Message feedback system | ✅ Implemented — thumbs up/down with reason and model context |
+| v1.0.0 | Backup & restore | ✅ Implemented — pg_dump + tar scripts with rotation |
 | v1.1 | Direct provider API routing | Call Anthropic/Google/OpenAI directly, OpenRouter as fallback |
 | v1.1 | Embedding-based conversation search | Semantic search across all conversations |
 | v1.2 | Content quality scoring pipeline | AI-based output quality assessment |

@@ -415,6 +415,7 @@ async def user_login(
         success=True,
     )
     await db.commit()
+    await db.refresh(user)
 
     return UserLoginResponse(
         token=token,

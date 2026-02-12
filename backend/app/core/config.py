@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    # Logging
+    log_level: str = "INFO"
+    log_format: str = "text"  # "json" for structured, "text" for development
+
     # Rate Limiting
     rate_limit_enabled: bool = True
     rate_limit_login: str = "5/minute"

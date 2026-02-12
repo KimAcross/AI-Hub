@@ -8,8 +8,10 @@ import httpx
 
 from app.core.config import get_settings
 from app.core.exceptions import OpenRouterError
+from app.core.logging import get_logger
 
 settings = get_settings()
+logger = get_logger(__name__)
 
 # Module-level pricing cache
 _pricing_cache: dict[str, dict[str, float]] = {}
@@ -217,6 +219,7 @@ class OpenRouterService:
             "stream": False,
         }
 
+        start_time = time.time()
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
                 response = await client.post(
@@ -227,22 +230,40 @@ class OpenRouterService:
                 response.raise_for_status()
 
                 data = response.json()
+                latency_ms = int((time.time() - start_time) * 1000)
+                tokens = data.get("usage", {})
+                logger.info(
+                    "Chat completion finished",
+                    extra={
+                        "model": model,
+                        "latency_ms": latency_ms,
+                        "prompt_tokens": tokens.get("prompt_tokens", 0),
+                        "completion_tokens": tokens.get("completion_tokens", 0),
+                        "total_tokens": tokens.get("total_tokens", 0),
+                    },
+                )
                 return {
                     "content": data["choices"][0]["message"]["content"],
                     "model": data.get("model", model),
                     "tokens_used": {
-                        "prompt_tokens": data.get("usage", {}).get("prompt_tokens", 0),
-                        "completion_tokens": data.get("usage", {}).get("completion_tokens", 0),
-                        "total_tokens": data.get("usage", {}).get("total_tokens", 0),
+                        "prompt_tokens": tokens.get("prompt_tokens", 0),
+                        "completion_tokens": tokens.get("completion_tokens", 0),
+                        "total_tokens": tokens.get("total_tokens", 0),
                     },
                 }
 
             except httpx.HTTPStatusError as e:
+                latency_ms = int((time.time() - start_time) * 1000)
+                logger.error(
+                    "Chat completion HTTP error",
+                    extra={"model": model, "latency_ms": latency_ms, "status_code": e.response.status_code},
+                )
                 raise OpenRouterError(
                     f"Chat completion failed: {e.response.text}",
                     status_code=e.response.status_code,
                 )
             except Exception as e:
+                logger.error("Chat completion error", extra={"model": model, "error": str(e)})
                 raise OpenRouterError(f"Chat completion failed: {str(e)}")
 
     async def stream_chat_completion(
@@ -279,6 +300,7 @@ class OpenRouterService:
             "stream": True,
         }
 
+        start_time = time.time()
         async with httpx.AsyncClient(timeout=300.0) as client:
             try:
                 async with client.stream(
@@ -289,6 +311,10 @@ class OpenRouterService:
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
+                        logger.error(
+                            "Streaming completion HTTP error",
+                            extra={"model": model, "status_code": response.status_code},
+                        )
                         raise OpenRouterError(
                             f"Chat completion failed: {error_body.decode()}",
                             status_code=response.status_code,
@@ -306,6 +332,17 @@ class OpenRouterService:
                             data_str = line[6:]
 
                             if data_str.strip() == "[DONE]":
+                                latency_ms = int((time.time() - start_time) * 1000)
+                                logger.info(
+                                    "Streaming completion finished",
+                                    extra={
+                                        "model": model,
+                                        "latency_ms": latency_ms,
+                                        "prompt_tokens": prompt_tokens,
+                                        "completion_tokens": completion_tokens,
+                                        "total_tokens": prompt_tokens + completion_tokens,
+                                    },
+                                )
                                 # Stream complete
                                 yield {
                                     "type": "done",

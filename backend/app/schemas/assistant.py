@@ -22,6 +22,8 @@ class AssistantCreate(AssistantBase):
     model: str = Field(default="anthropic/claude-3.5-sonnet", max_length=100)
     temperature: Decimal = Field(default=Decimal("0.7"), ge=0, le=2)
     max_tokens: int = Field(default=4096, ge=100, le=128000)
+    max_retrieval_chunks: int = Field(default=5, ge=1, le=20)
+    max_context_tokens: int = Field(default=4000, ge=500, le=32000)
     avatar_url: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("temperature", mode="before")
@@ -42,6 +44,8 @@ class AssistantUpdate(BaseModel):
     model: Optional[str] = Field(default=None, max_length=100)
     temperature: Optional[Decimal] = Field(default=None, ge=0, le=2)
     max_tokens: Optional[int] = Field(default=None, ge=100, le=128000)
+    max_retrieval_chunks: Optional[int] = Field(default=None, ge=1, le=20)
+    max_context_tokens: Optional[int] = Field(default=None, ge=500, le=32000)
     avatar_url: Optional[str] = Field(default=None, max_length=500)
 
     @field_validator("temperature", mode="before")
@@ -62,6 +66,8 @@ class AssistantResponse(AssistantBase):
     model: str
     temperature: Decimal
     max_tokens: int
+    max_retrieval_chunks: int = Field(default=5)
+    max_context_tokens: int = Field(default=4000)
     avatar_url: Optional[str]
     file_count: int = Field(default=0)
     is_deleted: bool

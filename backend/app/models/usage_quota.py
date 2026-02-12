@@ -31,7 +31,7 @@ class UsageQuota(Base):
         default=uuid.uuid4,
     )
     scope: Mapped[QuotaScope] = mapped_column(
-        Enum(QuotaScope),
+        Enum(QuotaScope, values_callable=lambda e: [x.value for x in e]),
         nullable=False,
         default=QuotaScope.GLOBAL,
     )

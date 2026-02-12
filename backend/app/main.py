@@ -1,6 +1,6 @@
 """FastAPI application entry point."""
 
-import logging
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -12,21 +12,39 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import AIAcrossException
+from app.core.logging import (
+    generate_request_id,
+    get_logger,
+    request_id_var,
+    setup_logging,
+    user_id_var,
+)
 from app.core.rate_limit import get_limiter, rate_limit_exceeded_handler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup and shutdown events."""
-    # Startup
+    # Startup — configure logging first
+    setup_logging(log_level=settings.log_level, log_format=settings.log_format)
     logger.info(f"Starting {settings.app_name} in {settings.app_env} mode...")
     if settings.is_production:
         logger.info("Production mode: API docs disabled, strict CORS enabled")
+
+    # Start ingestion reaper background task
+    from app.services.ingestion_reaper import get_ingestion_reaper
+
+    reaper = get_ingestion_reaper()
+    reaper_task = asyncio.create_task(reaper.run())
+
     yield
+
     # Shutdown
+    reaper.stop()
+    reaper_task.cancel()
     logger.info(f"Shutting down {settings.app_name}...")
 
 
@@ -78,6 +96,34 @@ else:
     )
 
 
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    """Inject request_id and user context into every request for log correlation."""
+
+    async def dispatch(self, request: Request, call_next):
+        rid = generate_request_id()
+        request_id_var.set(rid)
+
+        # Extract user_id from Authorization header (JWT) if present
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            try:
+                from jose import jwt
+
+                token = auth_header[7:]
+                payload = jwt.decode(
+                    token, settings.secret_key, algorithms=["HS256"],
+                    options={"verify_exp": False},
+                )
+                if sub := payload.get("sub"):
+                    user_id_var.set(str(sub))
+            except Exception:
+                pass
+
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
+
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
@@ -102,6 +148,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 

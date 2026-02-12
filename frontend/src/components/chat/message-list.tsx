@@ -11,6 +11,7 @@ interface MessageListProps {
   isStreaming?: boolean
   onRegenerate?: (messageId: string) => void
   onEditMessage?: (messageId: string) => void
+  onFeedback?: (messageId: string, feedback: 'positive' | 'negative', reason?: string) => void
 }
 
 export function MessageList({
@@ -20,6 +21,7 @@ export function MessageList({
   isStreaming = false,
   onRegenerate,
   onEditMessage,
+  onFeedback,
 }: MessageListProps) {
   const messagesEndRef = React.useRef<HTMLDivElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
@@ -88,6 +90,11 @@ export function MessageList({
             onEdit={
               message.role === 'user'
                 ? () => onEditMessage?.(message.id)
+                : undefined
+            }
+            onFeedback={
+              message.role === 'assistant'
+                ? (feedback, reason) => onFeedback?.(message.id, feedback, reason)
                 : undefined
             }
           />

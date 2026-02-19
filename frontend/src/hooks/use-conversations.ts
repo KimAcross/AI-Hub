@@ -15,6 +15,7 @@ export function useConversations(assistantId?: string) {
   return useQuery({
     queryKey: conversationKeys.list(assistantId),
     queryFn: () => conversationsApi.list(assistantId),
+    select: (data) => (Array.isArray(data) ? data : []),
   })
 }
 

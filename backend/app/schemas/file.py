@@ -35,6 +35,11 @@ class FileResponse(BaseModel):
     chunk_count: int
     status: str
     error_message: Optional[str] = None
+    processing_started_at: Optional[datetime] = None
+    attempt_count: int = 0
+    max_attempts: int = 3
+    next_retry_at: Optional[datetime] = None
+    last_error: Optional[str] = None
     created_at: datetime
 
 

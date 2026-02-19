@@ -89,6 +89,39 @@ services:
       - frontend
     restart: unless-stopped
 
+  backup:
+    image: alpine:3.20
+    container_name: aiacross-backup
+    profiles: ["ops"]
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER:-aiacross}
+      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD is required}
+      - DB_NAME=${DB_NAME:-aiacross}
+      - BACKUP_DIR=/backups
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+      - UPLOADS_DIR=/app/data/uploads
+      - CHROMA_DIR=/app/data/chroma
+    volumes:
+      - ./docker/scripts:/scripts:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+      - backend_uploads:/app/data/uploads
+      - backend_chroma:/app/data/chroma
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        apk add --no-cache bash postgresql17-client tar tzdata
+        while true; do
+          sh /scripts/backup.sh
+          sleep 86400
+        done
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   backend_uploads:

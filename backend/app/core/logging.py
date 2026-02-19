@@ -1,107 +1,92 @@
-"""Structured logging with request correlation IDs."""
+"""Structured logging with request context propagation."""
 
+import contextvars
 import logging
 import sys
-import uuid
-from contextvars import ContextVar
-from typing import Any, Optional
+from typing import Any
 
-from pythonjsonlogger import jsonlogger
+from pythonjsonlogger.json import JsonFormatter
 
-# Context variables for request-scoped data
-request_id_var: ContextVar[Optional[str]] = ContextVar("request_id", default=None)
-user_id_var: ContextVar[Optional[str]] = ContextVar("user_id", default=None)
-conversation_id_var: ContextVar[Optional[str]] = ContextVar("conversation_id", default=None)
-assistant_id_var: ContextVar[Optional[str]] = ContextVar("assistant_id", default=None)
+from app.core.config import get_settings
 
-
-class ContextAwareJsonFormatter(jsonlogger.JsonFormatter):
-    """JSON formatter that injects context variables into every log record."""
-
-    def add_fields(
-        self, log_record: dict[str, Any], record: logging.LogRecord, message_dict: dict[str, Any]
-    ) -> None:
-        super().add_fields(log_record, record, message_dict)
-
-        log_record["timestamp"] = self.formatTime(record)
-        log_record["level"] = record.levelname
-        log_record["logger"] = record.name
-
-        # Inject context variables when available
-        if request_id := request_id_var.get():
-            log_record["request_id"] = request_id
-        if user_id := user_id_var.get():
-            log_record["user_id"] = user_id
-        if conv_id := conversation_id_var.get():
-            log_record["conversation_id"] = conv_id
-        if asst_id := assistant_id_var.get():
-            log_record["assistant_id"] = asst_id
+request_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "request_id", default=None
+)
+user_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "user_id", default=None
+)
+conversation_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "conversation_id", default=None
+)
+assistant_id_ctx: contextvars.ContextVar[str | None] = contextvars.ContextVar(
+    "assistant_id", default=None
+)
 
 
-class ContextAwareTextFormatter(logging.Formatter):
-    """Text formatter that prepends context variables for development readability."""
+class ContextFilter(logging.Filter):
+    """Inject contextvars into every log record."""
 
-    def format(self, record: logging.LogRecord) -> str:
-        parts = []
-        if request_id := request_id_var.get():
-            parts.append(f"req={request_id[:8]}")
-        if user_id := user_id_var.get():
-            parts.append(f"user={user_id[:8]}")
-        if conv_id := conversation_id_var.get():
-            parts.append(f"conv={conv_id[:8]}")
-        if asst_id := assistant_id_var.get():
-            parts.append(f"asst={asst_id[:8]}")
-
-        ctx = f" [{' '.join(parts)}]" if parts else ""
-        base = f"%(asctime)s %(levelname)-8s %(name)s{ctx} %(message)s"
-        formatter = logging.Formatter(base)
-        return formatter.format(record)
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.request_id = request_id_ctx.get()
+        record.user_id = user_id_ctx.get()
+        record.conversation_id = conversation_id_ctx.get()
+        record.assistant_id = assistant_id_ctx.get()
+        return True
 
 
-def setup_logging(log_level: str = "INFO", log_format: str = "text") -> None:
-    """Configure application logging.
+def set_request_context(
+    *,
+    request_id: str | None = None,
+    user_id: str | None = None,
+    conversation_id: str | None = None,
+    assistant_id: str | None = None,
+) -> None:
+    """Set context variables for the current async task."""
+    if request_id is not None:
+        request_id_ctx.set(request_id)
+    if user_id is not None:
+        user_id_ctx.set(user_id)
+    if conversation_id is not None:
+        conversation_id_ctx.set(conversation_id)
+    if assistant_id is not None:
+        assistant_id_ctx.set(assistant_id)
 
-    Args:
-        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL).
-        log_format: Log format — "json" for structured JSON, "text" for human-readable.
-    """
-    root_logger = logging.getLogger()
-    root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
 
-    # Remove existing handlers
-    root_logger.handlers.clear()
+def clear_request_context() -> None:
+    """Clear contextvars at request boundaries."""
+    request_id_ctx.set(None)
+    user_id_ctx.set(None)
+    conversation_id_ctx.set(None)
+    assistant_id_ctx.set(None)
+
+
+def configure_logging() -> None:
+    """Configure root logging once at startup."""
+    settings = get_settings()
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.setLevel(settings.log_level.upper())
 
     handler = logging.StreamHandler(sys.stdout)
+    handler.addFilter(ContextFilter())
 
-    if log_format.lower() == "json":
-        formatter = ContextAwareJsonFormatter(
-            fmt="%(timestamp)s %(level)s %(name)s %(message)s",
+    if settings.log_format.lower() == "json":
+        formatter: logging.Formatter = JsonFormatter(
+            "%(asctime)s %(levelname)s %(name)s %(message)s "
+            "%(request_id)s %(user_id)s %(conversation_id)s %(assistant_id)s"
         )
     else:
-        formatter = ContextAwareTextFormatter()
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)s %(name)s "
+            "[request_id=%(request_id)s user_id=%(user_id)s "
+            "conversation_id=%(conversation_id)s assistant_id=%(assistant_id)s] "
+            "%(message)s"
+        )
 
     handler.setFormatter(formatter)
-    root_logger.addHandler(handler)
-
-    # Quiet noisy third-party loggers
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("chromadb").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    root.addHandler(handler)
 
 
-def get_logger(name: str) -> logging.Logger:
-    """Get a logger with the given name.
-
-    Args:
-        name: Logger name (typically __name__).
-
-    Returns:
-        Logger instance.
-    """
-    return logging.getLogger(name)
-
-
-def generate_request_id() -> str:
-    """Generate a new request ID."""
-    return str(uuid.uuid4())
+def get_logger(name: str, **fields: Any) -> logging.LoggerAdapter:
+    """Get a logger adapter that merges structured extra fields."""
+    return logging.LoggerAdapter(logging.getLogger(name), extra=fields)

@@ -3,13 +3,7 @@ import { AdminLayout } from '@/components/admin/admin-layout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select } from '@/components/ui/select'
 import { UserTable } from '@/components/admin/users/user-table'
 import { UserDialog } from '@/components/admin/users/user-dialog'
 import { PasswordResetDialog } from '@/components/admin/users/password-reset-dialog'
@@ -139,33 +133,29 @@ function UsersPageContent() {
                 setRoleFilter(v as UserRole | 'all')
                 setPage(1)
               }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="user">User</SelectItem>
-              </SelectContent>
-            </Select>
+              options={[
+                { value: 'all', label: 'All Roles' },
+                { value: 'admin', label: 'Admin' },
+                { value: 'manager', label: 'Manager' },
+                { value: 'user', label: 'User' },
+              ]}
+              placeholder="Role"
+              className="w-[150px]"
+            />
             <Select
               value={activeFilter}
               onValueChange={(v) => {
                 setActiveFilter(v as 'all' | 'active' | 'disabled')
                 setPage(1)
               }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="disabled">Disabled</SelectItem>
-              </SelectContent>
-            </Select>
+              options={[
+                { value: 'all', label: 'All Status' },
+                { value: 'active', label: 'Active' },
+                { value: 'disabled', label: 'Disabled' },
+              ]}
+              placeholder="Status"
+              className="w-[150px]"
+            />
           </div>
 
           {/* Table */}
@@ -211,6 +201,7 @@ function UsersPageContent() {
 
       {/* Dialogs */}
       <UserDialog
+        key={`${dialogMode}-${selectedUser?.id ?? 'new'}-${dialogOpen ? 'open' : 'closed'}`}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         user={selectedUser}

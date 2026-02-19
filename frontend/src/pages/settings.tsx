@@ -425,8 +425,8 @@ export function SettingsPage() {
                     <div className="flex gap-4">
                       <div className="flex-1">
                         <Slider
-                          value={[autoSaveInterval]}
-                          onValueChange={(value) => setAutoSaveInterval(value[0])}
+                          value={autoSaveInterval}
+                          onChange={setAutoSaveInterval}
                           max={300}
                           min={0}
                           step={5}

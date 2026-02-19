@@ -88,9 +88,7 @@ class UserService:
             UserNotFoundError: If user not found.
         """
         result = await self.db.execute(
-            select(User)
-            .options(selectinload(User.api_keys))
-            .where(User.id == user_id)
+            select(User).options(selectinload(User.api_keys)).where(User.id == user_id)
         )
         user = result.scalar_one_or_none()
         if not user:

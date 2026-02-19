@@ -23,6 +23,11 @@ class UserRole(str, enum.Enum):
     USER = "user"
 
 
+def _enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """Return enum values for SQLAlchemy Enum mapping."""
+    return [item.value for item in enum_cls]
+
+
 class User(Base):
     """User model for multi-user authentication and authorization."""
 
@@ -41,7 +46,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     role: Mapped[UserRole] = mapped_column(
-        Enum(UserRole, values_callable=lambda e: [x.value for x in e]),
+        Enum(UserRole, values_callable=_enum_values),
         nullable=False,
         default=UserRole.USER,
     )

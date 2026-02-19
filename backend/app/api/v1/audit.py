@@ -29,7 +29,9 @@ async def query_audit_logs(
     request: Request,
     _admin: Annotated[dict, Depends(require_admin_role)],
     db: AsyncSession = Depends(get_db),
-    action: Optional[str] = Query(None, description="Filter by action (or action prefix)"),
+    action: Optional[str] = Query(
+        None, description="Filter by action (or action prefix)"
+    ),
     resource_type: Optional[str] = Query(None, description="Filter by resource type"),
     resource_id: Optional[str] = Query(None, description="Filter by resource ID"),
     actor: Optional[str] = Query(None, description="Filter by actor"),
@@ -157,20 +159,32 @@ async def export_audit_logs(
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
-        ["id", "action", "resource_type", "resource_id", "actor", "actor_id", "ip_address", "details", "created_at"]
+        [
+            "id",
+            "action",
+            "resource_type",
+            "resource_id",
+            "actor",
+            "actor_id",
+            "ip_address",
+            "details",
+            "created_at",
+        ]
     )
     for log in logs:
-        writer.writerow([
-            str(log.id),
-            log.action,
-            log.resource_type,
-            log.resource_id,
-            log.actor,
-            log.actor_id,
-            log.ip_address,
-            json.dumps(log.details) if log.details else "",
-            log.created_at.isoformat() if log.created_at else "",
-        ])
+        writer.writerow(
+            [
+                str(log.id),
+                log.action,
+                log.resource_type,
+                log.resource_id,
+                log.actor,
+                log.actor_id,
+                log.ip_address,
+                json.dumps(log.details) if log.details else "",
+                log.created_at.isoformat() if log.created_at else "",
+            ]
+        )
 
     return StreamingResponse(
         io.BytesIO(output.getvalue().encode("utf-8")),

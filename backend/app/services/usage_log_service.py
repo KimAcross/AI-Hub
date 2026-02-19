@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.usage_log import UsageLog
@@ -122,10 +122,18 @@ class UsageLogService:
 
         query = select(
             func.coalesce(func.sum(UsageLog.total_tokens), 0).label("total_tokens"),
-            func.coalesce(func.sum(UsageLog.prompt_tokens), 0).label("total_prompt_tokens"),
-            func.coalesce(func.sum(UsageLog.completion_tokens), 0).label("total_completion_tokens"),
-            func.coalesce(func.sum(UsageLog.cost_usd), Decimal("0")).label("total_cost_usd"),
-            func.count(func.distinct(UsageLog.conversation_id)).label("total_conversations"),
+            func.coalesce(func.sum(UsageLog.prompt_tokens), 0).label(
+                "total_prompt_tokens"
+            ),
+            func.coalesce(func.sum(UsageLog.completion_tokens), 0).label(
+                "total_completion_tokens"
+            ),
+            func.coalesce(func.sum(UsageLog.cost_usd), Decimal("0")).label(
+                "total_cost_usd"
+            ),
+            func.count(func.distinct(UsageLog.conversation_id)).label(
+                "total_conversations"
+            ),
             func.count().label("total_messages"),
         ).where(
             UsageLog.created_at >= period_start,

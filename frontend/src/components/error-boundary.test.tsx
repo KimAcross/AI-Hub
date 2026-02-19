@@ -1,6 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@/test/utils'
-import userEvent from '@testing-library/user-event'
 import { ErrorBoundary } from './error-boundary'
 
 // Component that throws an error

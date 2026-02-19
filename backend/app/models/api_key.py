@@ -31,6 +31,11 @@ class APIKeyStatus(str, enum.Enum):
     UNTESTED = "untested"
 
 
+def _enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """Return enum values for SQLAlchemy Enum mapping."""
+    return [item.value for item in enum_cls]
+
+
 class APIKey(Base):
     """API key model for storing multiple provider API keys."""
 
@@ -42,7 +47,7 @@ class APIKey(Base):
         default=uuid.uuid4,
     )
     provider: Mapped[APIKeyProvider] = mapped_column(
-        Enum(APIKeyProvider, values_callable=lambda e: [x.value for x in e]),
+        Enum(APIKeyProvider, values_callable=_enum_values),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -67,7 +72,7 @@ class APIKey(Base):
         nullable=True,
     )
     test_status: Mapped[APIKeyStatus] = mapped_column(
-        Enum(APIKeyStatus, values_callable=lambda e: [x.value for x in e]),
+        Enum(APIKeyStatus, values_callable=_enum_values),
         nullable=False,
         default=APIKeyStatus.UNTESTED,
     )

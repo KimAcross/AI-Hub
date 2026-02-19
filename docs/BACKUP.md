@@ -1,130 +1,92 @@
-# Backup & Restore
+# Backup and Restore Runbook
 
-This document covers the backup and restore procedures for AI-Across.
+This runbook covers daily backups for:
+- PostgreSQL data
+- Uploaded files (`UPLOAD_DIR`)
+- ChromaDB persistence (`CHROMA_PERSIST_DIR`)
 
-## What Gets Backed Up
+## Prerequisites
 
-| Component | Contents | Backup Format |
-|-----------|----------|---------------|
-| PostgreSQL | All tables (assistants, conversations, messages, users, etc.) | `pg_dump` custom format (`.dump`) |
-| Uploads | Knowledge base files (PDFs, DOCX, TXT, MD) | Compressed tar (`.tar.gz`) |
-| ChromaDB | Vector embeddings for RAG retrieval | Compressed tar (`.tar.gz`) |
+- Docker Compose stack is running (`db`, `backend`).
+- `DB_USER`, `DB_PASSWORD`, `DB_NAME` are set.
+- Backup scripts exist:
+  - `docker/scripts/backup.sh`
+  - `docker/scripts/restore.sh`
 
-## Backup Schedule
+## Configuration
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `BACKUP_SCHEDULE` | `0 2 * * *` | Daily at 2:00 AM |
-| `BACKUP_RETENTION_DAYS` | `7` | Keep last 7 days of backups |
-| `BACKUP_DIR` | `/backups` | Base directory for backup storage |
+Set in `.env` (or environment):
 
-## Running Backups
+```env
+BACKUP_DIR=./backups
+BACKUP_RETENTION_DAYS=7
+```
 
-### Manual Backup
+Optional overrides:
 
-From the host machine where Docker is running:
+```env
+DB_HOST=db
+DB_PORT=5432
+UPLOADS_DIR=/app/data/uploads
+CHROMA_DIR=/app/data/chroma
+```
+
+## Run Backup Manually
+
+From repo root:
 
 ```bash
-./docker/scripts/backup.sh
+docker compose run --rm \
+  -e DB_PASSWORD="$DB_PASSWORD" \
+  -e BACKUP_DIR=/backups \
+  -e BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}" \
+  -v "$(pwd)/backups:/backups" \
+  -v backend_uploads:/app/data/uploads \
+  -v backend_chroma:/app/data/chroma \
+  backup sh /scripts/backup.sh
 ```
 
-### Automated via Cron
-
-Add to your host crontab (`crontab -e`):
-
-```cron
-# AI-Across daily backup at 2 AM
-0 2 * * * BACKUP_DIR=/backups BACKUP_RETENTION_DAYS=7 DB_PASSWORD=your-db-password /path/to/ai-hub/docker/scripts/backup.sh >> /var/log/aiacross-backup.log 2>&1
-```
-
-### Environment Variables
-
-Set these in your shell or crontab before running `backup.sh`:
-
-```bash
-export BACKUP_DIR=/backups             # Where to store backups
-export BACKUP_RETENTION_DAYS=7         # Days to keep
-export DB_USER=aiacross                # PostgreSQL user
-export DB_NAME=aiacross                # PostgreSQL database
-export DB_PASSWORD=your-db-password    # PostgreSQL password (for non-Docker runs)
-```
-
-## Backup Output
-
-Each backup creates a timestamped directory:
-
-```
-/backups/
-├── 20260212_020000/
-│   ├── postgres.dump      # PostgreSQL database dump
-│   ├── uploads.tar.gz     # Uploaded knowledge files
-│   ├── chroma.tar.gz      # ChromaDB vector data
-│   └── metadata.json      # Backup metadata
-├── 20260211_020000/
-│   └── ...
-```
+Each run creates `BACKUP_DIR/<timestamp>/` with:
+- `postgres.dump`
+- `uploads.tar.gz` (if present)
+- `chroma.tar.gz` (if present)
+- `manifest.txt`
 
 ## Restore Procedure
 
-### Step 1: Identify the Backup
-
-List available backups:
-
-```bash
-ls -la /backups/
-```
-
-### Step 2: Run Restore
+1. Pick backup folder, e.g. `./backups/20260219T120000Z`.
+2. Stop write traffic to the app.
+3. Run restore:
 
 ```bash
-./docker/scripts/restore.sh /backups/20260212_020000
+docker compose run --rm \
+  -e DB_PASSWORD="$DB_PASSWORD" \
+  -v "$(pwd)/backups:/backups" \
+  -v backend_uploads:/app/data/uploads \
+  -v backend_chroma:/app/data/chroma \
+  backup sh /scripts/restore.sh /backups/20260219T120000Z
 ```
 
-The script will:
-1. Show backup contents and ask for confirmation
-2. Stop the backend container
-3. Drop and recreate the PostgreSQL database
-4. Restore uploads and ChromaDB data
-5. Restart the backend and verify health
+4. Confirm prompt by typing `RESTORE`.
+5. Restart services and validate app behavior.
 
-### Step 3: Verify
+## Restore Drill (Required)
 
-After restore, verify:
-- Health endpoint: `curl http://localhost/health`
-- Login to the application and check data
-- Verify an assistant's knowledge files are accessible
+Run a monthly drill in non-production:
+1. Take a fresh backup.
+2. Restore into a clean test environment.
+3. Validate:
+- admin login works
+- assistants and conversations are visible
+- at least one RAG query returns expected context
+4. Record drill date, backup timestamp, and any issues.
 
-## Restore Drill
+## Scheduling
 
-Perform a restore drill quarterly to ensure backups are valid:
+Use host cron (recommended):
 
-1. **Create a fresh backup:** `./docker/scripts/backup.sh`
-2. **Note current state:** Count of assistants, conversations, users
-3. **Run restore** from the backup just created
-4. **Verify counts match** and the application functions correctly
-5. **Document results** with date and any issues encountered
-
-## Troubleshooting
-
-### Backup fails with "permission denied"
-
-Ensure the backup directory is writable:
-
-```bash
-mkdir -p /backups
-chmod 755 /backups
+```cron
+0 2 * * * cd /path/to/AI-Hub && DB_PASSWORD=... BACKUP_RETENTION_DAYS=7 docker compose run --rm -e DB_PASSWORD=$DB_PASSWORD -e BACKUP_RETENTION_DAYS=$BACKUP_RETENTION_DAYS -v /path/to/AI-Hub/backups:/backups -v backend_uploads:/app/data/uploads -v backend_chroma:/app/data/chroma backup sh /scripts/backup.sh >> /var/log/aiacross-backup.log 2>&1
 ```
 
-### Restore fails with "database in use"
-
-The restore script terminates active connections automatically. If it still fails, stop all containers first:
-
-```bash
-docker compose stop backend
-./docker/scripts/restore.sh /backups/20260212_020000
-docker compose up -d
-```
-
-### Large backup sizes
-
-ChromaDB vectors can grow large with many files. Monitor backup sizes and adjust retention accordingly. For a typical deployment with ~100 knowledge files, expect ~500MB per backup.
+This satisfies the daily backup + retention requirement without adding separate host tooling.

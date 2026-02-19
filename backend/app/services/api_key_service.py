@@ -1,6 +1,5 @@
 """API key service for multi-provider AI API key management."""
 
-import asyncio
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
@@ -23,7 +22,9 @@ class APIKeyService:
         settings = get_settings()
         self.secret_key = settings.secret_key
 
-    async def list_keys(self, provider: Optional[APIKeyProvider] = None) -> list[APIKey]:
+    async def list_keys(
+        self, provider: Optional[APIKeyProvider] = None
+    ) -> list[APIKey]:
         """List all API keys, optionally filtered by provider.
 
         Args:
@@ -49,9 +50,7 @@ class APIKeyService:
         Returns:
             APIKey object or None if not found.
         """
-        result = await self.db.execute(
-            select(APIKey).where(APIKey.id == key_id)
-        )
+        result = await self.db.execute(select(APIKey).where(APIKey.id == key_id))
         return result.scalar_one_or_none()
 
     async def create_key(
@@ -224,9 +223,15 @@ class APIKeyService:
                 valid, error = await self._test_google(api_key)
             else:
                 # For custom/unknown providers, just mark as untested
-                return {"valid": None, "error": "Cannot test custom provider", "latency_ms": None}
+                return {
+                    "valid": None,
+                    "error": "Cannot test custom provider",
+                    "latency_ms": None,
+                }
 
-            latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+            latency_ms = int(
+                (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
+            )
 
             # Update key status
             key.last_tested_at = datetime.now(timezone.utc)

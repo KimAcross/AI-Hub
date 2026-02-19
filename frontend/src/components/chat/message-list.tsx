@@ -2,7 +2,7 @@ import * as React from 'react'
 import { MessageBubble } from './message-bubble'
 import { StreamingMessage } from './streaming-message'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { Message } from '@/types'
+import type { Message, MessageFeedback } from '@/types'
 
 interface MessageListProps {
   messages: Message[]
@@ -11,7 +11,7 @@ interface MessageListProps {
   isStreaming?: boolean
   onRegenerate?: (messageId: string) => void
   onEditMessage?: (messageId: string) => void
-  onFeedback?: (messageId: string, feedback: 'positive' | 'negative', reason?: string) => void
+  onFeedback?: (messageId: string, feedback: MessageFeedback) => void
 }
 
 export function MessageList({
@@ -77,7 +77,7 @@ export function MessageList({
       className="flex-1 overflow-y-auto"
       onScroll={handleScroll}
     >
-      <div className="max-w-4xl mx-auto divide-y divide-border">
+      <div className="w-full divide-y divide-border">
         {messages.map((message) => (
           <MessageBubble
             key={message.id}
@@ -94,7 +94,7 @@ export function MessageList({
             }
             onFeedback={
               message.role === 'assistant'
-                ? (feedback, reason) => onFeedback?.(message.id, feedback, reason)
+                ? (feedback) => onFeedback?.(message.id, feedback)
                 : undefined
             }
           />

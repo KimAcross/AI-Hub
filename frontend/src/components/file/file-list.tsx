@@ -27,7 +27,9 @@ const statusConfig: Record<FileStatus, {
   uploading: { label: 'Uploading', icon: Loader2, variant: 'secondary' },
   processing: { label: 'Processing', icon: Loader2, variant: 'secondary' },
   indexing: { label: 'Indexing', icon: Loader2, variant: 'secondary' },
+  pending: { label: 'Pending Retry', icon: Loader2, variant: 'warning' },
   ready: { label: 'Ready', icon: CheckCircle, variant: 'success' },
+  failed: { label: 'Failed', icon: AlertCircle, variant: 'destructive' },
   error: { label: 'Error', icon: AlertCircle, variant: 'destructive' },
 }
 
@@ -53,7 +55,7 @@ export function FileList({
       {files.map((file) => {
         const status = statusConfig[file.status]
         const StatusIcon = status.icon
-        const isProcessing = ['uploading', 'processing', 'indexing'].includes(file.status)
+        const isProcessing = ['uploading', 'processing', 'indexing', 'pending'].includes(file.status)
 
         return (
           <div key={file.id} className="flex items-center gap-4 py-4">
@@ -83,7 +85,7 @@ export function FileList({
             </Badge>
 
             <div className="flex items-center gap-1">
-              {file.status === 'error' && (
+              {(file.status === 'error' || file.status === 'failed') && (
                 <Button
                   variant="ghost"
                   size="icon"

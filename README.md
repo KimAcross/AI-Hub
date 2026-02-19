@@ -7,15 +7,24 @@ AI-Across is a self-hosted AI content platform designed for content agency opera
 ## Features
 
 - **Specialized AI Assistants** - Pre-configured personas for press releases, article rewriting, blog posts, social media, and more
-- **Knowledge Base (RAG)** - Upload PDFs, DOCX, TXT, and Markdown files to give assistants contextual knowledge, with per-assistant retrieval guardrails
+- **Knowledge Base (RAG)** - Upload PDFs, DOCX, TXT, and Markdown files to give assistants contextual knowledge
 - **Model Agnostic** - Switch between Claude, GPT-4, Gemini, Llama, and 50+ models via OpenRouter
 - **Secure Multi-User** - JWT authentication, role-based access control (Admin/Manager/User), conversation isolation
-- **Message Feedback** - Thumbs up/down on AI responses with optional reason capture for quality tracking
-- **Self-Healing Ingestion** - Stuck file processing auto-recovers with exponential backoff retries
-- **Structured Logging** - JSON logs with request correlation IDs (`X-Request-ID`) for end-to-end tracing
-- **Backup & Restore** - Automated backup scripts with rotation and tested restore procedures
 - **Full Data Ownership** - Self-hosted, your data never leaves your infrastructure
 - **Modern Stack** - FastAPI backend, React frontend, PostgreSQL + ChromaDB
+
+## Current Behavior (Important)
+
+- Clicking an assistant card opens chat directly with that assistant (`/chat?assistant=<assistant_id>`).
+- The assistant card 3-dot menu remains available for admin actions (edit/delete/restore).
+- Model selection behavior:
+  - Assistant chat starts with the assistant model configured by admin.
+  - General chat starts with `Settings -> Default Model`.
+  - Users can still change the model from the chat dropdown before sending.
+- OpenRouter API key resolution:
+  - Settings UI key (database) is used first.
+  - Environment variable key is fallback.
+  - This applies to both model listing and actual chat completions.
 
 ## Quick Start
 
@@ -40,7 +49,7 @@ AI-Across is a self-hosted AI content platform designed for content agency opera
 
 3. **Start the development environment**
    ```bash
-   docker-compose -f docker-compose.dev.yml up -d
+   docker compose -f docker-compose.dev.yml up -d
    ```
 
 4. **Access the application**
@@ -51,7 +60,7 @@ AI-Across is a self-hosted AI content platform designed for content agency opera
 ### Production Deployment
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed production deployment instructions.
@@ -111,7 +120,6 @@ ai-across/
 | `/api/v1/assistants/templates` | GET | Any | List pre-built templates |
 | `/api/v1/conversations` | GET, POST | Any | Manage conversations (user-isolated) |
 | `/api/v1/conversations/{id}/messages` | POST | Any | Send message (streaming, ownership check) |
-| `/api/v1/conversations/{id}/messages/{msg_id}/feedback` | POST | Any | Submit thumbs up/down feedback |
 | `/api/v1/models` | GET | Any | List available LLM models |
 | `/api/v1/settings` | GET | Any | Application settings |
 | `/api/v1/settings` | PATCH | Admin | Update application settings |
@@ -156,10 +164,6 @@ Full API documentation available at `/docs` when running the server.
 | `CHROMA_PERSIST_DIR` | ChromaDB storage path | `./data/chroma` |
 | `UPLOAD_DIR` | File upload path | `./data/uploads` |
 | `MAX_FILE_SIZE_MB` | Max upload size | `50` |
-| `LOG_LEVEL` | Logging level | `INFO` |
-| `LOG_FORMAT` | Log format (`text` or `json`) | `text` |
-| `BACKUP_DIR` | Backup storage directory | `/backups` |
-| `BACKUP_RETENTION_DAYS` | Days to keep backups | `7` |
 
 See [.env.example](.env.example) for all configuration options.
 
@@ -169,16 +173,16 @@ See [.env.example](.env.example) for all configuration options.
 - [Development Roadmap](ROADMAP.md)
 - [Architecture Overview](docs/ARCHITECTURE.md)
 - [High-Level Design](docs/HLD.md)
+- [Backup & Restore Runbook](docs/BACKUP.md)
 - [API Reference](http://localhost:8000/docs)
 - [Deployment Guide](docs/DEPLOYMENT.md)
-- [Backup & Restore](docs/BACKUP.md)
 - [Changelog](CHANGELOG.md)
 
 ## Development Status
 
 See [ROADMAP.md](ROADMAP.md) for development phases and [CHANGELOG.md](CHANGELOG.md) for version history.
 
-**Current Status:** v1.0.0 — All phases complete, production-ready
+**Current Status:** Phase 8 complete (v1.0 shipped scope) with v1.1 planning active (see `ROADMAP.md`).
 
 | Phase | Status |
 |-------|--------|
@@ -189,26 +193,44 @@ See [ROADMAP.md](ROADMAP.md) for development phases and [CHANGELOG.md](CHANGELOG
 | Phase 5: Frontend - Chat Interface | ✅ Complete |
 | Phase 6: Polish & QA | ✅ Complete |
 | Phase 7: Admin Board | ✅ Complete |
-| Phase 8: Production Deployment | ✅ Complete |
+| Phase 8: Production Deployment | Complete |
 | Phase 9: Admin Dashboard Enhancement | ✅ Complete |
 | Phase 10: Security Hardening & User Auth | ✅ Complete |
 
-### v1.0.0 (Phase 8 Complete)
+### Recent Updates (v0.9.0)
 
-- **Structured Logging** - JSON logs with `X-Request-ID` correlation, contextvars for `request_id`/`user_id`/`conversation_id`/`assistant_id`
-- **Self-Healing Ingestion** - Stuck file processing auto-detected and retried with exponential backoff (5→15→45 min), fails gracefully after 3 attempts
-- **Backup & Restore** - `backup.sh`/`restore.sh` scripts with auto-rotation, full runbook in `docs/BACKUP.md`
-- **Message Feedback** - ThumbsUp/ThumbsDown on assistant messages with optional reason, persisted with model context
-- **Workspace Isolation** - `workspace_id` on core tables (future-proofing for v1.1 client isolation)
-- **RAG Guardrails** - Per-assistant configurable retrieval limits (max chunks, max context tokens)
-- **CI Pipeline** - GitHub Actions with parallel backend + frontend quality gates
+- **Full Authentication** - All API endpoints now require JWT authentication (no public access)
+- **User Login** - User login page with email/password, auth guard on all routes
+- **Conversation Isolation** - Users see only their own conversations, admins see all
+- **Role-Based UI** - Admin-only assistant management, simplified user settings
+- **Security Headers** - CSP, X-Frame-Options, HSTS, and more on all responses
+- **MIME Validation** - File uploads validated with magic bytes, not just extension
+- **Password Policy** - Strength requirements (uppercase, lowercase, digit, special char)
+- **Quota Display** - Color-coded progress bars for user usage limits
+- **Audit Export** - CSV/JSON export for audit logs
 
-### Previous (v0.9.0)
+### Recent Stabilization (Unreleased)
 
-- **Full Authentication** - All API endpoints require JWT authentication
-- **Conversation Isolation** - Users see only their own conversations
-- **Role-Based UI** - Admin-only assistant management
-- **Security Headers** - CSP, HSTS, MIME validation, password policy
+- Fixed login/chat/runtime 500s caused by async SQLAlchemy lazy-loading edge cases.
+- Fixed assistant/chat/settings data-shape crashes in frontend (array normalization).
+- Fixed chat SSE completion parsing (`done` event handling) and validation error rendering.
+- Fixed model list availability for Settings by reading database-stored OpenRouter key.
+- Improved assistant-to-chat navigation and default model initialization behavior.
+- Added GitHub Actions CI at `.github/workflows/ci.yml` with backend/frontend checks and a gated E2E smoke run.
+- Stabilized auth-aware backend test fixtures and endpoint expectations after Phase 10 hardening.
+- Added structured logging with request correlation IDs (`X-Request-ID`) and contextual fields.
+- Added self-healing ingestion retries (attempt tracking, pending retries, periodic reaper).
+- Added backup/restore scripts and runbook (`docs/BACKUP.md`).
+- Added message feedback (thumbs up/down + optional reason).
+- Added workspace schema groundwork and per-assistant RAG guardrails.
+- Documentation audit completed: roadmap/readme/architecture/HLD synchronized and missing linked docs added.
+
+### Previous (v0.8.0)
+
+- **User Management** - Multi-user support with roles (Admin, Manager, User)
+- **API Key Management** - Multi-provider key management (OpenRouter, OpenAI, Anthropic, Google, Azure)
+- **Usage Quotas** - Daily/monthly cost and token limits with alerts
+- **Audit Logging** - Complete action tracking with old/new value comparison
 
 ## License
 
@@ -217,3 +239,4 @@ Proprietary - MarketAcross
 ## Support
 
 For issues and feature requests, contact the MarketAcross development team.
+

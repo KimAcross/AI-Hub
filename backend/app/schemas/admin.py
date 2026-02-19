@@ -69,7 +69,9 @@ class UsageBreakdownResponse(BaseModel):
     """Response schema for usage breakdown."""
 
     by_model: list[UsageByModel] = Field(description="Usage breakdown by model")
-    by_assistant: list[UsageByAssistant] = Field(description="Usage breakdown by assistant")
+    by_assistant: list[UsageByAssistant] = Field(
+        description="Usage breakdown by assistant"
+    )
 
 
 class DailyUsage(BaseModel):

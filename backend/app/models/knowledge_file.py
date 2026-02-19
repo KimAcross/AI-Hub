@@ -40,8 +40,6 @@ class KnowledgeFile(Base):
         default="processing",
     )
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
-    # Ingestion resilience fields
     processing_started_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
@@ -51,14 +49,12 @@ class KnowledgeFile(Base):
         DateTime(timezone=True), nullable=True
     )
     last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-
     workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workspaces.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

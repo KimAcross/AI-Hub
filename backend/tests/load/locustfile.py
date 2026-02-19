@@ -1,6 +1,5 @@
 """Locust load testing configuration for AI-Across API."""
 
-import json
 import random
 import uuid
 

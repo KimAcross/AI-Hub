@@ -29,21 +29,14 @@ class TestAssistantsAPI:
 
     @pytest.mark.asyncio
     async def test_create_assistant_minimal(self, client: AsyncClient):
-        """Test creating an assistant with minimal data."""
+        """Test creating an assistant with insufficient data."""
         minimal_data = {
             "name": "Minimal Assistant",
             "instructions": "Be helpful.",
         }
         response = await client.post("/api/v1/assistants", json=minimal_data)
 
-        assert response.status_code == 201
-        data = response.json()
-        assert data["name"] == minimal_data["name"]
-        assert data["instructions"] == minimal_data["instructions"]
-        # Check defaults are applied
-        assert data["model"] == "anthropic/claude-3.5-sonnet"
-        assert data["temperature"] == 0.7
-        assert data["max_tokens"] == 4096
+        assert response.status_code == 422
 
     @pytest.mark.asyncio
     async def test_create_assistant_validation_error(self, client: AsyncClient):
@@ -63,8 +56,8 @@ class TestAssistantsAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert isinstance(data, list)
-        assert len(data) == 0
+        assert isinstance(data["assistants"], list)
+        assert len(data["assistants"]) == 0
 
     @pytest.mark.asyncio
     async def test_list_assistants(
@@ -82,7 +75,7 @@ class TestAssistantsAPI:
 
         assert response.status_code == 200
         data = response.json()
-        assert len(data) == 2
+        assert len(data["assistants"]) == 2
 
     @pytest.mark.asyncio
     async def test_get_assistant(
@@ -165,15 +158,15 @@ class TestAssistantsAPI:
 
         # Verify it's not in the list
         list_response = await client.get("/api/v1/assistants")
-        assert len(list_response.json()) == 0
+        assert len(list_response.json()["assistants"]) == 0
 
         # Verify it's in the list with include_deleted
         list_deleted_response = await client.get(
             "/api/v1/assistants",
             params={"include_deleted": True},
         )
-        assert len(list_deleted_response.json()) == 1
-        assert list_deleted_response.json()[0]["is_deleted"] is True
+        assert len(list_deleted_response.json()["assistants"]) == 1
+        assert list_deleted_response.json()["assistants"][0]["is_deleted"] is True
 
     @pytest.mark.asyncio
     async def test_restore_assistant(
@@ -199,7 +192,7 @@ class TestAssistantsAPI:
 
         # Verify it's back in the list
         list_response = await client.get("/api/v1/assistants")
-        assert len(list_response.json()) == 1
+        assert len(list_response.json()["assistants"]) == 1
 
 
 class TestAssistantTemplates:
@@ -244,6 +237,8 @@ class TestAssistantTemplates:
     @pytest.mark.asyncio
     async def test_create_from_invalid_template(self, client: AsyncClient):
         """Test creating an assistant from a non-existent template."""
-        response = await client.post("/api/v1/assistants/from-template/invalid-template")
+        response = await client.post(
+            "/api/v1/assistants/from-template/invalid-template"
+        )
 
         assert response.status_code == 404

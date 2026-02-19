@@ -1,4 +1,4 @@
-import { ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Outlet } from 'react-router-dom'
 import { AdminGuard } from './admin-guard'
 import { AdminSidebar } from './admin-sidebar'

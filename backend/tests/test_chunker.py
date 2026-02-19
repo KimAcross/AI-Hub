@@ -1,7 +1,5 @@
 """Tests for text chunking utilities."""
 
-import pytest
-
 from app.utils.chunker import TextChunker, TextChunk, chunk_text
 
 

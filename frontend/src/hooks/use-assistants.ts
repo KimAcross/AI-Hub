@@ -17,6 +17,7 @@ export function useAssistants(includeDeleted = false) {
   return useQuery({
     queryKey: assistantKeys.list(includeDeleted),
     queryFn: () => assistantsApi.list(includeDeleted),
+    select: (data) => (Array.isArray(data) ? data : []),
   })
 }
 

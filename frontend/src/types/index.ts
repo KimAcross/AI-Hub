@@ -48,11 +48,13 @@ export interface AssistantTemplate {
   model: string
   temperature: number
   max_tokens: number
+  max_retrieval_chunks: number
+  max_context_tokens: number
   category: string
 }
 
 // File Types
-export type FileStatus = 'uploading' | 'processing' | 'indexing' | 'ready' | 'error'
+export type FileStatus = 'uploading' | 'processing' | 'indexing' | 'pending' | 'ready' | 'failed' | 'error'
 
 export interface KnowledgeFile {
   id: string
@@ -79,7 +81,7 @@ export interface Conversation {
 }
 
 export interface ConversationCreate {
-  assistant_id?: string
+  assistant_id?: string | null
   title?: string
 }
 
@@ -94,9 +96,15 @@ export interface Message {
     completion_tokens?: number
     total_tokens?: number
   } | null
-  created_at: string
   feedback?: 'positive' | 'negative' | null
   feedback_reason?: string | null
+  feedback_context?: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface MessageFeedback {
+  feedback: 'positive' | 'negative'
+  feedback_reason?: string
 }
 
 export interface MessageCreate {

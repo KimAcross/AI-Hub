@@ -80,14 +80,16 @@ export function UsageChart({ data, isLoading }: UsageChartProps) {
                   border: '1px solid hsl(var(--border))',
                   borderRadius: '8px',
                 }}
-                formatter={(value: number, name: string) => {
+                formatter={(value: number | string | undefined, name: string | undefined) => {
+                  const numericValue =
+                    typeof value === 'number' ? value : Number(value ?? 0)
                   if (name === 'cost') {
-                    return [`$${value.toFixed(4)}`, 'Cost']
+                    return [`$${numericValue.toFixed(4)}`, 'Cost']
                   }
                   if (name === 'tokens') {
-                    return [value.toLocaleString(), 'Tokens']
+                    return [numericValue.toLocaleString(), 'Tokens']
                   }
-                  return [value, name]
+                  return [numericValue, name]
                 }}
               />
               <Legend />

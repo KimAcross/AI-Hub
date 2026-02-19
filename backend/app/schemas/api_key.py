@@ -14,15 +14,21 @@ class APIKeyCreate(BaseModel):
     """Request schema for creating an API key."""
 
     provider: APIKeyProvider = Field(..., description="AI provider type")
-    name: str = Field(..., min_length=1, max_length=100, description="Display name for the key")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Display name for the key"
+    )
     api_key: str = Field(..., min_length=1, description="The API key value")
-    is_default: bool = Field(default=False, description="Set as default for this provider")
+    is_default: bool = Field(
+        default=False, description="Set as default for this provider"
+    )
 
 
 class APIKeyUpdate(BaseModel):
     """Request schema for updating an API key."""
 
-    name: Optional[str] = Field(None, min_length=1, max_length=100, description="New display name")
+    name: Optional[str] = Field(
+        None, min_length=1, max_length=100, description="New display name"
+    )
     is_active: Optional[bool] = Field(None, description="Active status")
 
 
@@ -41,11 +47,15 @@ class APIKeyResponse(BaseModel):
     name: str = Field(description="Display name")
     key_masked: str = Field(description="Masked key (first/last 4 chars)")
     is_active: bool = Field(description="Whether the key is active")
-    is_default: bool = Field(description="Whether this is the default key for the provider")
+    is_default: bool = Field(
+        description="Whether this is the default key for the provider"
+    )
     last_used_at: Optional[datetime] = Field(None, description="Last usage timestamp")
     last_tested_at: Optional[datetime] = Field(None, description="Last test timestamp")
     test_status: APIKeyStatus = Field(description="Last test result status")
-    test_error: Optional[str] = Field(None, description="Error from last test if failed")
+    test_error: Optional[str] = Field(
+        None, description="Error from last test if failed"
+    )
     created_at: datetime = Field(description="Creation timestamp")
     updated_at: datetime = Field(description="Last update timestamp")
 

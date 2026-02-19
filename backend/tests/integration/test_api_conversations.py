@@ -4,16 +4,27 @@ import pytest
 from httpx import AsyncClient
 
 
+async def _create_assistant(client: AsyncClient, sample_assistant_data: dict) -> str:
+    response = await client.post("/api/v1/assistants", json=sample_assistant_data)
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
 @pytest.mark.asyncio
 class TestConversationsAPI:
     """Integration tests for /api/v1/conversations endpoints."""
 
     async def test_create_conversation(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test creating a new conversation."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         response = await client.post(
-            "/api/v1/conversations", json=sample_conversation_data
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
         )
         assert response.status_code == 201
 
@@ -49,30 +60,36 @@ class TestConversationsAPI:
     async def test_create_conversation_default_title(self, client: AsyncClient):
         """Test creating a conversation without a title uses default."""
         response = await client.post("/api/v1/conversations", json={})
-        assert response.status_code == 201
+        assert response.status_code == 422
 
-        data = response.json()
-        assert data["title"] is not None
-
-    async def test_list_conversations_empty(self, client: AsyncClient):
+    async def test_list_conversations_empty(
+        self, client: AsyncClient, sample_assistant_data: dict
+    ):
         """Test listing conversations when none exist."""
         response = await client.get("/api/v1/conversations")
         assert response.status_code == 200
-        assert response.json() == []
+        assert response.json()["conversations"] == []
 
     async def test_list_conversations(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test listing conversations."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         # Create a conversation
-        await client.post("/api/v1/conversations", json=sample_conversation_data)
+        await client.post(
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
+        )
 
         response = await client.get("/api/v1/conversations")
         assert response.status_code == 200
 
         data = response.json()
-        assert len(data) == 1
-        assert data[0]["title"] == sample_conversation_data["title"]
+        assert len(data["conversations"]) == 1
+        assert data["conversations"][0]["title"] == sample_conversation_data["title"]
 
     async def test_list_conversations_by_assistant(
         self,
@@ -93,9 +110,14 @@ class TestConversationsAPI:
             json={**sample_conversation_data, "assistant_id": assistant_id},
         )
 
-        # Create conversation without assistant
+        # Create conversation with a different assistant
+        second_assistant_id = await _create_assistant(client, sample_assistant_data)
         await client.post(
-            "/api/v1/conversations", json={"title": "Unlinked Conversation"}
+            "/api/v1/conversations",
+            json={
+                "title": "Second Assistant Conversation",
+                "assistant_id": second_assistant_id,
+            },
         )
 
         # Filter by assistant
@@ -105,16 +127,21 @@ class TestConversationsAPI:
         assert response.status_code == 200
 
         data = response.json()
-        assert len(data) == 1
-        assert data[0]["assistant_id"] == assistant_id
+        assert len(data["conversations"]) == 1
+        assert data["conversations"][0]["assistant_id"] == assistant_id
 
     async def test_get_conversation(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test getting a specific conversation by ID."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         # Create a conversation
         create_response = await client.post(
-            "/api/v1/conversations", json=sample_conversation_data
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
         )
         conversation_id = create_response.json()["id"]
 
@@ -131,12 +158,17 @@ class TestConversationsAPI:
         assert response.status_code == 404
 
     async def test_update_conversation(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test updating a conversation title."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         # Create a conversation
         create_response = await client.post(
-            "/api/v1/conversations", json=sample_conversation_data
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
         )
         conversation_id = create_response.json()["id"]
 
@@ -151,12 +183,17 @@ class TestConversationsAPI:
         assert data["title"] == new_title
 
     async def test_delete_conversation(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test deleting a conversation."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         # Create a conversation
         create_response = await client.post(
-            "/api/v1/conversations", json=sample_conversation_data
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
         )
         conversation_id = create_response.json()["id"]
 
@@ -174,12 +211,17 @@ class TestConversationExportAPI:
     """Integration tests for conversation export functionality."""
 
     async def test_export_conversation_markdown(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test exporting a conversation as markdown."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         # Create a conversation
         create_response = await client.post(
-            "/api/v1/conversations", json=sample_conversation_data
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
         )
         conversation_id = create_response.json()["id"]
 
@@ -188,15 +230,21 @@ class TestConversationExportAPI:
             params={"format": "markdown"},
         )
         assert response.status_code == 200
-        assert isinstance(response.json(), str)
+        data = response.json()
+        assert "messages" in data
 
     async def test_export_conversation_json(
-        self, client: AsyncClient, sample_conversation_data: dict
+        self,
+        client: AsyncClient,
+        sample_assistant_data: dict,
+        sample_conversation_data: dict,
     ):
         """Test exporting a conversation as JSON."""
+        assistant_id = await _create_assistant(client, sample_assistant_data)
         # Create a conversation
         create_response = await client.post(
-            "/api/v1/conversations", json=sample_conversation_data
+            "/api/v1/conversations",
+            json={**sample_conversation_data, "assistant_id": assistant_id},
         )
         conversation_id = create_response.json()["id"]
 

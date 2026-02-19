@@ -1,7 +1,7 @@
 """Quota service for usage limits and enforcement."""
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 from uuid import UUID
@@ -262,25 +262,37 @@ class QuotaService:
         result.monthly_token_limit = quota.monthly_token_limit
 
         # Check daily cost limit
-        if quota.daily_cost_limit_usd and usage["daily_cost_used"] >= quota.daily_cost_limit_usd:
+        if (
+            quota.daily_cost_limit_usd
+            and usage["daily_cost_used"] >= quota.daily_cost_limit_usd
+        ):
             result.allowed = False
             result.reason = "Daily cost limit exceeded"
             return result
 
         # Check monthly cost limit
-        if quota.monthly_cost_limit_usd and usage["monthly_cost_used"] >= quota.monthly_cost_limit_usd:
+        if (
+            quota.monthly_cost_limit_usd
+            and usage["monthly_cost_used"] >= quota.monthly_cost_limit_usd
+        ):
             result.allowed = False
             result.reason = "Monthly cost limit exceeded"
             return result
 
         # Check daily token limit
-        if quota.daily_token_limit and usage["daily_tokens_used"] >= quota.daily_token_limit:
+        if (
+            quota.daily_token_limit
+            and usage["daily_tokens_used"] >= quota.daily_token_limit
+        ):
             result.allowed = False
             result.reason = "Daily token limit exceeded"
             return result
 
         # Check monthly token limit
-        if quota.monthly_token_limit and usage["monthly_tokens_used"] >= quota.monthly_token_limit:
+        if (
+            quota.monthly_token_limit
+            and usage["monthly_tokens_used"] >= quota.monthly_token_limit
+        ):
             result.allowed = False
             result.reason = "Monthly token limit exceeded"
             return result
@@ -315,57 +327,67 @@ class QuotaService:
         if quota.daily_cost_limit_usd and quota.daily_cost_limit_usd > 0:
             percent = float(usage["daily_cost_used"] / quota.daily_cost_limit_usd * 100)
             if percent >= threshold:
-                alerts.append(QuotaAlert(
-                    alert_type="cost",
-                    period="daily",
-                    current_value=float(usage["daily_cost_used"]),
-                    limit_value=float(quota.daily_cost_limit_usd),
-                    percent_used=percent,
-                    threshold_percent=threshold,
-                    is_exceeded=percent >= 100,
-                ))
+                alerts.append(
+                    QuotaAlert(
+                        alert_type="cost",
+                        period="daily",
+                        current_value=float(usage["daily_cost_used"]),
+                        limit_value=float(quota.daily_cost_limit_usd),
+                        percent_used=percent,
+                        threshold_percent=threshold,
+                        is_exceeded=percent >= 100,
+                    )
+                )
 
         # Check monthly cost
         if quota.monthly_cost_limit_usd and quota.monthly_cost_limit_usd > 0:
-            percent = float(usage["monthly_cost_used"] / quota.monthly_cost_limit_usd * 100)
+            percent = float(
+                usage["monthly_cost_used"] / quota.monthly_cost_limit_usd * 100
+            )
             if percent >= threshold:
-                alerts.append(QuotaAlert(
-                    alert_type="cost",
-                    period="monthly",
-                    current_value=float(usage["monthly_cost_used"]),
-                    limit_value=float(quota.monthly_cost_limit_usd),
-                    percent_used=percent,
-                    threshold_percent=threshold,
-                    is_exceeded=percent >= 100,
-                ))
+                alerts.append(
+                    QuotaAlert(
+                        alert_type="cost",
+                        period="monthly",
+                        current_value=float(usage["monthly_cost_used"]),
+                        limit_value=float(quota.monthly_cost_limit_usd),
+                        percent_used=percent,
+                        threshold_percent=threshold,
+                        is_exceeded=percent >= 100,
+                    )
+                )
 
         # Check daily tokens
         if quota.daily_token_limit and quota.daily_token_limit > 0:
             percent = usage["daily_tokens_used"] / quota.daily_token_limit * 100
             if percent >= threshold:
-                alerts.append(QuotaAlert(
-                    alert_type="tokens",
-                    period="daily",
-                    current_value=usage["daily_tokens_used"],
-                    limit_value=quota.daily_token_limit,
-                    percent_used=percent,
-                    threshold_percent=threshold,
-                    is_exceeded=percent >= 100,
-                ))
+                alerts.append(
+                    QuotaAlert(
+                        alert_type="tokens",
+                        period="daily",
+                        current_value=usage["daily_tokens_used"],
+                        limit_value=quota.daily_token_limit,
+                        percent_used=percent,
+                        threshold_percent=threshold,
+                        is_exceeded=percent >= 100,
+                    )
+                )
 
         # Check monthly tokens
         if quota.monthly_token_limit and quota.monthly_token_limit > 0:
             percent = usage["monthly_tokens_used"] / quota.monthly_token_limit * 100
             if percent >= threshold:
-                alerts.append(QuotaAlert(
-                    alert_type="tokens",
-                    period="monthly",
-                    current_value=usage["monthly_tokens_used"],
-                    limit_value=quota.monthly_token_limit,
-                    percent_used=percent,
-                    threshold_percent=threshold,
-                    is_exceeded=percent >= 100,
-                ))
+                alerts.append(
+                    QuotaAlert(
+                        alert_type="tokens",
+                        period="monthly",
+                        current_value=usage["monthly_tokens_used"],
+                        limit_value=quota.monthly_token_limit,
+                        percent_used=percent,
+                        threshold_percent=threshold,
+                        is_exceeded=percent >= 100,
+                    )
+                )
 
         return alerts
 
@@ -404,19 +426,27 @@ class QuotaService:
         if quota:
             if quota.daily_cost_limit_usd:
                 result["daily_cost_limit"] = float(quota.daily_cost_limit_usd)
-                result["daily_cost_percent"] = float(usage["daily_cost_used"] / quota.daily_cost_limit_usd * 100)
+                result["daily_cost_percent"] = float(
+                    usage["daily_cost_used"] / quota.daily_cost_limit_usd * 100
+                )
 
             if quota.monthly_cost_limit_usd:
                 result["monthly_cost_limit"] = float(quota.monthly_cost_limit_usd)
-                result["monthly_cost_percent"] = float(usage["monthly_cost_used"] / quota.monthly_cost_limit_usd * 100)
+                result["monthly_cost_percent"] = float(
+                    usage["monthly_cost_used"] / quota.monthly_cost_limit_usd * 100
+                )
 
             if quota.daily_token_limit:
                 result["daily_token_limit"] = quota.daily_token_limit
-                result["daily_token_percent"] = usage["daily_tokens_used"] / quota.daily_token_limit * 100
+                result["daily_token_percent"] = (
+                    usage["daily_tokens_used"] / quota.daily_token_limit * 100
+                )
 
             if quota.monthly_token_limit:
                 result["monthly_token_limit"] = quota.monthly_token_limit
-                result["monthly_token_percent"] = usage["monthly_tokens_used"] / quota.monthly_token_limit * 100
+                result["monthly_token_percent"] = (
+                    usage["monthly_tokens_used"] / quota.monthly_token_limit * 100
+                )
 
         return result
 

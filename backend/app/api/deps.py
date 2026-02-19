@@ -3,26 +3,36 @@
 from typing import Annotated, Optional
 
 from fastapi import Depends, Header, HTTPException, Request, status
+from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.user import UserRole
 from app.services.assistant_service import AssistantService
 from app.services.conversation_service import ConversationService
+from app.services.openrouter_service import get_openrouter_service
+from app.services.settings_service import SettingsService
 
 
 async def get_assistant_service(
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AssistantService:
     """Dependency that provides an AssistantService instance."""
     return AssistantService(db)
 
 
 async def get_conversation_service(
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ConversationService:
     """Dependency that provides a ConversationService instance."""
-    return ConversationService(db)
+    config = get_settings()
+    settings_service = SettingsService(db)
+    api_key = (
+        await settings_service.get_openrouter_api_key() or config.openrouter_api_key
+    )
+    openrouter_service = get_openrouter_service(api_key=api_key)
+    return ConversationService(db, openrouter_service=openrouter_service)
 
 
 def get_client_info(request: Request) -> tuple[Optional[str], Optional[str]]:
@@ -138,7 +148,6 @@ async def verify_user_token(
         HTTPException: If token is missing or invalid.
     """
     from app.services.admin_auth_service import get_admin_auth_service
-    from app.services.user_auth_service import UserAuthService
 
     if not x_admin_token:
         raise HTTPException(
@@ -146,35 +155,33 @@ async def verify_user_token(
             detail="Authentication token required",
         )
 
-    # Try admin token first (sub="admin")
-    admin_service = get_admin_auth_service()
-    payload = admin_service.verify_token(x_admin_token)
+    # First, try admin-token validation (sub="admin").
+    admin_auth = get_admin_auth_service()
+    payload = admin_auth.verify_token(x_admin_token)
 
-    if payload:
-        # Legacy admin token — set role to admin
-        payload["role"] = UserRole.ADMIN.value
-        return payload
-
-    # Try user token (sub=<user-uuid>)
-    try:
-        from jose import jwt as jose_jwt
-        from app.core.config import get_settings
-
+    # Fall back to regular user JWT validation.
+    if not payload:
         settings = get_settings()
-        user_payload = jose_jwt.decode(
-            x_admin_token,
-            settings.secret_key,
-            algorithms=[UserAuthService.ALGORITHM],
-        )
-        if user_payload.get("sub") and user_payload.get("sub") != "admin":
-            return user_payload
-    except Exception:
-        pass
+        try:
+            payload = jwt.decode(
+                x_admin_token,
+                settings.secret_key,
+                algorithms=["HS256"],
+            )
+        except JWTError:
+            payload = None
 
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or expired token",
-    )
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+        )
+
+    # For legacy admin tokens, set role to admin
+    if payload.get("sub") == "admin":
+        payload["role"] = UserRole.ADMIN.value
+
+    return payload
 
 
 async def require_role(
@@ -255,4 +262,6 @@ async def require_any_role(
     Returns:
         Token payload if user has any role.
     """
-    return await require_role([UserRole.ADMIN, UserRole.MANAGER, UserRole.USER], x_admin_token)
+    return await require_role(
+        [UserRole.ADMIN, UserRole.MANAGER, UserRole.USER], x_admin_token
+    )

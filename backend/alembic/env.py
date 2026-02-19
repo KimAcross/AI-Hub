@@ -12,7 +12,6 @@ from app.core.config import get_settings
 from app.db.base import Base
 
 # Import all models to ensure they are registered with Base.metadata
-from app.models import Assistant, Conversation, KnowledgeFile, Message, Settings
 
 # Alembic Config object
 config = context.config

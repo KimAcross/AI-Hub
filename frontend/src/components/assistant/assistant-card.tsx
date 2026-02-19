@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { Link } from 'react-router-dom'
-import { useNavigate } from 'react-router-dom'
-import { Bot, FileText, MessageSquare, MoreVertical, Trash2, RotateCcw, Edit } from 'lucide-react'
+import { Bot, FileText, MoreVertical, Trash2, RotateCcw, Edit } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,9 +15,7 @@ interface AssistantCardProps {
 }
 
 export const AssistantCard = React.memo(function AssistantCard({ assistant, onEdit, onDelete, onRestore }: AssistantCardProps) {
-  const navigate = useNavigate()
   const [menuOpen, setMenuOpen] = React.useState(false)
-  const hasMenuActions = !!(onEdit || onDelete || onRestore)
 
   return (
     <Card className={cn(
@@ -27,7 +24,7 @@ export const AssistantCard = React.memo(function AssistantCard({ assistant, onEd
     )}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <Link to={`/assistants/${assistant.id}`} className="flex items-center gap-3 flex-1">
+          <Link to={`/chat?assistant=${assistant.id}`} className="flex items-center gap-3 flex-1">
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
               {assistant.avatar_url ? (
                 <img
@@ -47,78 +44,62 @@ export const AssistantCard = React.memo(function AssistantCard({ assistant, onEd
             </div>
           </Link>
 
-          {hasMenuActions && (
-            <div className="relative">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setMenuOpen(!menuOpen)}
-              >
-                <MoreVertical className="h-4 w-4" />
-              </Button>
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setMenuOpen(!menuOpen)}
+            >
+              <MoreVertical className="h-4 w-4" />
+            </Button>
 
-              {menuOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setMenuOpen(false)}
-                  />
-                  <div className="absolute right-0 top-8 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
-                    {!assistant.is_deleted ? (
-                      <>
-                        <button
-                          className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                          onClick={() => {
-                            setMenuOpen(false)
-                            navigate(`/chat?assistant=${assistant.id}`)
-                          }}
-                        >
-                          <MessageSquare className="h-4 w-4" />
-                          Start Chat
-                        </button>
-                        {onEdit && (
-                          <button
-                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
-                            onClick={() => {
-                              setMenuOpen(false)
-                              onEdit()
-                            }}
-                          >
-                            <Edit className="h-4 w-4" />
-                            Edit
-                          </button>
-                        )}
-                        {onDelete && (
-                          <button
-                            className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-accent"
-                            onClick={() => {
-                              setMenuOpen(false)
-                              onDelete()
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        )}
-                      </>
-                    ) : onRestore ? (
+            {menuOpen && (
+              <>
+                <div
+                  className="fixed inset-0 z-10"
+                  onClick={() => setMenuOpen(false)}
+                />
+                <div className="absolute right-0 top-8 z-20 w-40 rounded-md border bg-popover p-1 shadow-md">
+                  {!assistant.is_deleted ? (
+                    <>
                       <button
                         className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
                         onClick={() => {
                           setMenuOpen(false)
-                          onRestore()
+                          onEdit?.()
                         }}
                       >
-                        <RotateCcw className="h-4 w-4" />
-                        Restore
+                        <Edit className="h-4 w-4" />
+                        Edit
                       </button>
-                    ) : null}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+                      <button
+                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-destructive hover:bg-accent"
+                        onClick={() => {
+                          setMenuOpen(false)
+                          onDelete?.()
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-accent"
+                      onClick={() => {
+                        setMenuOpen(false)
+                        onRestore?.()
+                      }}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Restore
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </CardHeader>
 

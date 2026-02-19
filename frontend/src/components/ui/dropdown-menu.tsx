@@ -67,6 +67,14 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
   ({ className, align = 'center', children, ...props }, ref) => {
     const { open, setOpen } = useDropdownMenu()
     const contentRef = React.useRef<HTMLDivElement>(null)
+    const setRefs = (node: HTMLDivElement | null) => {
+      contentRef.current = node
+      if (typeof ref === 'function') {
+        ref(node)
+      } else if (ref) {
+        ref.current = node
+      }
+    }
 
     React.useEffect(() => {
       const handleClickOutside = (event: MouseEvent) => {
@@ -100,7 +108,7 @@ const DropdownMenuContent = React.forwardRef<HTMLDivElement, DropdownMenuContent
 
     return (
       <div
-        ref={contentRef}
+        ref={setRefs}
         className={cn(
           'absolute z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md',
           'animate-in fade-in-0 zoom-in-95',

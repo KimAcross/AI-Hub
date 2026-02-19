@@ -20,6 +20,11 @@ class QuotaScope(str, enum.Enum):
     USER = "user"
 
 
+def _enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """Return enum values for SQLAlchemy Enum mapping."""
+    return [item.value for item in enum_cls]
+
+
 class UsageQuota(Base):
     """Usage quota model for managing cost and token limits."""
 
@@ -31,7 +36,7 @@ class UsageQuota(Base):
         default=uuid.uuid4,
     )
     scope: Mapped[QuotaScope] = mapped_column(
-        Enum(QuotaScope, values_callable=lambda e: [x.value for x in e]),
+        Enum(QuotaScope, values_callable=_enum_values),
         nullable=False,
         default=QuotaScope.GLOBAL,
     )

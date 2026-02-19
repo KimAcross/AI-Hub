@@ -2,6 +2,19 @@
 
 React frontend application for AI-Across - a self-hosted AI content platform.
 
+## Current Behavior
+
+- Assistant cards navigate directly to assistant chat via `/chat?assistant=<id>`.
+- Assistant card 3-dot menu is preserved for admin edit/delete/restore actions.
+- Chat model defaults:
+  - Assistant chat starts from assistant model.
+  - General chat starts from app `default_model` setting.
+  - User can still change model from chat dropdown.
+- Streaming parser supports backend SSE event format:
+  - `type: content`
+  - `type: done` with `message_id`/`tokens_used`
+  - `type: error`
+
 ## Tech Stack
 
 | Technology | Version | Purpose |
@@ -26,43 +39,54 @@ React frontend application for AI-Across - a self-hosted AI content platform.
 
 ```
 src/
-├── api/                    # API client and React Query hooks
-│   ├── client.ts           # Axios instance with interceptors
-│   └── hooks/              # Custom hooks for data fetching
-│       ├── useAssistants.ts
-│       └── useFiles.ts
-├── components/             # React components
-│   ├── ui/                 # shadcn/ui primitives
-│   ├── layout/             # Layout components
-│   │   ├── Sidebar.tsx
-│   │   └── Header.tsx
-│   ├── assistants/         # Assistant-specific components
-│   │   ├── AssistantCard.tsx
-│   │   ├── AssistantForm.tsx
-│   │   └── AssistantList.tsx
-│   └── files/              # File management components
-│       ├── FileUploader.tsx
-│       └── FileList.tsx
-├── pages/                  # Route pages (lazy-loaded)
-│   ├── dashboard.tsx
-│   ├── assistants.tsx
-│   ├── chat.tsx
-│   └── settings.tsx
-├── hooks/                  # Custom React hooks
+├── App.tsx                     # Root app routes
+├── main.tsx                    # Entry point
+├── index.css                   # Global styles
+├── lib/
+│   ├── api.ts                  # Central API client + endpoint helpers
+│   └── utils.ts                # Shared frontend utilities
+├── hooks/                      # React Query and UI hooks
+│   ├── use-auth.ts
+│   ├── use-admin.ts
 │   ├── use-assistants.ts
 │   ├── use-conversations.ts
-│   ├── use-models.ts
 │   ├── use-chat.ts
+│   ├── use-files.ts
+│   ├── use-models.ts
+│   ├── use-settings.ts
 │   └── use-online-status.ts
-├── stores/                 # Zustand stores
-│   └── appStore.ts
-├── lib/                    # Utility functions
-│   └── utils.ts
-├── types/                  # TypeScript type definitions
-│   └── index.ts
-├── App.tsx                 # Root component with routing
-├── main.tsx                # Application entry point
-└── index.css               # Global styles and Tailwind imports
+├── stores/                     # Zustand stores
+│   ├── app-store.ts
+│   ├── auth-store.ts
+│   └── admin-store.ts
+├── pages/
+│   ├── login.tsx
+│   ├── dashboard.tsx
+│   ├── chat.tsx
+│   ├── settings.tsx
+│   ├── assistants/
+│   │   ├── index.tsx
+│   │   ├── detail.tsx
+│   │   └── new.tsx
+│   └── admin/
+│       ├── login.tsx
+│       ├── index.tsx
+│       ├── assistants.tsx
+│       ├── users.tsx
+│       ├── api-keys.tsx
+│       ├── usage.tsx
+│       ├── settings.tsx
+│       └── audit-logs.tsx
+├── components/
+│   ├── ui/                     # Base UI primitives
+│   ├── layout/
+│   ├── auth-guard.tsx
+│   ├── assistant/
+│   ├── chat/
+│   ├── file/
+│   └── admin/
+└── types/
+    └── index.ts
 ```
 
 ## Getting Started
@@ -107,7 +131,7 @@ The frontend is configured to run in Docker for development:
 
 ```bash
 # From project root
-docker-compose -f docker-compose.dev.yml up frontend
+docker compose -f docker-compose.dev.yml up frontend
 ```
 
 This provides:
@@ -122,6 +146,9 @@ Create a `.env` file for local development:
 ```env
 # API URL (defaults to localhost:8000)
 VITE_API_URL=http://localhost:8000
+
+# Dev proxy target for Vite server inside Docker
+VITE_API_PROXY_TARGET=http://backend:8000
 ```
 
 ## Component Library
@@ -160,15 +187,14 @@ The app implements several performance optimizations:
 
 - **React.memo** - Components like `MessageBubble`, `CodeBlock`, and `AssistantCard` are memoized
 - **Lazy Loading** - Route pages are lazy-loaded with `React.lazy()` and `Suspense`
-- **Image Lazy Loading** - `LazyImage` component uses `IntersectionObserver`
 - **Code Splitting** - Vite automatically splits bundles by route
 
 ## API Integration
 
-API hooks are located in `src/api/hooks/`. Example usage:
+API access is centralized in `src/lib/api.ts` and consumed via hooks in `src/hooks/`. Example usage:
 
 ```tsx
-import { useAssistants, useCreateAssistant } from '@/api/hooks/useAssistants';
+import { useAssistants, useCreateAssistant } from '@/hooks/use-assistants';
 
 function AssistantList() {
   const { data: assistants, isLoading } = useAssistants();
@@ -181,6 +207,23 @@ function AssistantList() {
   // ...
 }
 ```
+
+## Troubleshooting
+
+- Empty models dropdown in Settings:
+  - Verify OpenRouter API key in Settings page.
+  - Use "Test API Key".
+  - Confirm `/api/v1/models` returns non-empty list.
+- Chat error `Response stream ended before completion`:
+  - Check backend logs for SSE `error` events from OpenRouter.
+  - Confirm OpenRouter key is configured and valid.
+- 422 on `POST /api/v1/conversations`:
+  - Ensure an assistant is selected before starting a new chat.
+  - Frontend now blocks this flow with user-facing error.
+- Dev container serving stale module:
+  - Recreate frontend container:
+    - `docker compose -f docker-compose.dev.yml up -d --force-recreate frontend`
+  - Hard refresh browser (`Ctrl+F5`).
 
 ## Styling
 

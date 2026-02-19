@@ -6,10 +6,11 @@ export interface SelectProps
   extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { value: string; label: string }[]
   placeholder?: string
+  onValueChange?: (value: string) => void
 }
 
 const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
-  ({ className, options, placeholder, ...props }, ref) => {
+  ({ className, options, placeholder, onChange, onValueChange, ...props }, ref) => {
     return (
       <div className="relative">
         <select
@@ -18,6 +19,10 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
             "flex h-10 w-full appearance-none rounded-md border border-input bg-background px-3 py-2 pr-8 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
             className
           )}
+          onChange={(e) => {
+            onChange?.(e)
+            onValueChange?.(e.target.value)
+          }}
           {...props}
         >
           {placeholder && (

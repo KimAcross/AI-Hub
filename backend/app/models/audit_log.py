@@ -4,11 +4,13 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, Index, String, Text, func
+from sqlalchemy import JSON, DateTime, Index, String, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
+
+JSON_FIELD = JSON().with_variant(JSONB, "postgresql")
 
 
 class AuditLog(Base):
@@ -57,17 +59,17 @@ class AuditLog(Base):
         nullable=True,
     )
     details: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
+        JSON_FIELD,
         nullable=True,
         comment="Additional context about the action",
     )
     old_values: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
+        JSON_FIELD,
         nullable=True,
         comment="Previous values before change",
     )
     new_values: Mapped[Optional[dict]] = mapped_column(
-        JSONB,
+        JSON_FIELD,
         nullable=True,
         comment="New values after change",
     )

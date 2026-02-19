@@ -1,13 +1,18 @@
 """File management API endpoints."""
 
+import logging
 import uuid
 from typing import Annotated
 
-from app.core.logging import get_logger
-
-logger = get_logger(__name__)
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_assistant_service, require_admin_role, require_any_role
@@ -17,12 +22,14 @@ from app.schemas.file import FileListResponse, FileResponse, FileUploadResponse
 from app.services.assistant_service import AssistantService
 from app.services.file_processor import FileProcessorService
 
+logger = logging.getLogger(__name__)
+
 
 router = APIRouter(prefix="/assistants/{assistant_id}/files", tags=["files"])
 
 
 async def get_file_processor(
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FileProcessorService:
     """Dependency that provides a FileProcessorService instance."""
     return FileProcessorService(db)
@@ -36,7 +43,11 @@ async def process_file_background(
 
     Creates a new database session for background processing.
     """
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
 
     engine = create_async_engine(db_url, echo=False)
     async_session = async_sessionmaker(
@@ -95,10 +106,12 @@ async def upload_file(
         knowledge_file = await file_processor.upload_and_process(
             file=file,
             assistant_id=assistant_id,
+            workspace_id=assistant.workspace_id,
         )
 
         # Queue background processing
         from app.core.config import get_settings
+
         settings = get_settings()
 
         background_tasks.add_task(
@@ -260,6 +273,7 @@ async def reprocess_file(
 
     # Queue background processing
     from app.core.config import get_settings
+
     settings = get_settings()
 
     background_tasks.add_task(

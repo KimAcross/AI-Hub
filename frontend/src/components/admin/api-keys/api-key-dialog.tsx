@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -10,13 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select } from '@/components/ui/select'
 import { useCreateProviderKey, useUpdateProviderKey } from '@/hooks/use-admin'
 import type { ProviderApiKey, APIKeyProvider } from '@/types'
 import { Loader2 } from 'lucide-react'
@@ -38,29 +32,17 @@ const providers: { value: APIKeyProvider; label: string }[] = [
 ]
 
 export function ApiKeyDialog({ open, onOpenChange, apiKey, mode }: ApiKeyDialogProps) {
-  const [provider, setProvider] = useState<APIKeyProvider>('openrouter')
-  const [name, setName] = useState('')
+  const [provider, setProvider] = useState<APIKeyProvider>(
+    mode === 'edit' && apiKey ? apiKey.provider : 'openrouter'
+  )
+  const [name, setName] = useState(mode === 'edit' && apiKey ? apiKey.name : '')
   const [key, setKey] = useState('')
-  const [isDefault, setIsDefault] = useState(false)
+  const [isDefault, setIsDefault] = useState(mode === 'edit' && apiKey ? apiKey.is_default : false)
 
   const createKey = useCreateProviderKey()
   const updateKey = useUpdateProviderKey()
 
   const isLoading = createKey.isPending || updateKey.isPending
-
-  useEffect(() => {
-    if (apiKey && mode === 'edit') {
-      setProvider(apiKey.provider)
-      setName(apiKey.name)
-      setKey('')
-      setIsDefault(apiKey.is_default)
-    } else if (mode === 'create') {
-      setProvider('openrouter')
-      setName('')
-      setKey('')
-      setIsDefault(false)
-    }
-  }, [apiKey, mode, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -106,19 +88,11 @@ export function ApiKeyDialog({ open, onOpenChange, apiKey, mode }: ApiKeyDialogP
             <Select
               value={provider}
               onValueChange={(v) => setProvider(v as APIKeyProvider)}
+              options={providers}
+              placeholder="Select provider"
               disabled={mode === 'edit'}
-            >
-              <SelectTrigger id="provider">
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              id="provider"
+            />
           </div>
 
           <div className="space-y-2">

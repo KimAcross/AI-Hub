@@ -1,6 +1,5 @@
 """Settings schemas for API requests and responses."""
 
-from typing import Literal
 from pydantic import BaseModel, Field
 
 
@@ -14,8 +13,12 @@ class SettingsResponse(BaseModel):
     embedding_model: str = Field(description="Model used for embeddings")
     max_file_size_mb: int = Field(description="Maximum file upload size in MB")
     language: str = Field(description="Preferred language for the interface")
-    streaming_enabled: bool = Field(description="Whether streaming responses are enabled")
-    auto_save_interval: int = Field(description="Auto-save interval in seconds (0 to disable)")
+    streaming_enabled: bool = Field(
+        description="Whether streaming responses are enabled"
+    )
+    auto_save_interval: int = Field(
+        description="Auto-save interval in seconds (0 to disable)"
+    )
 
 
 class SettingsUpdate(BaseModel):
@@ -34,5 +37,8 @@ class SettingsUpdate(BaseModel):
         default=None, description="Whether streaming responses are enabled"
     )
     auto_save_interval: int | None = Field(
-        default=None, ge=0, le=300, description="Auto-save interval in seconds (0-300, 0 to disable)"
+        default=None,
+        ge=0,
+        le=300,
+        description="Auto-save interval in seconds (0-300, 0 to disable)",
     )

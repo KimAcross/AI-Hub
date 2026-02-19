@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.encryption import decrypt_if_needed, encrypt_value, is_encrypted
+from app.core.encryption import decrypt_if_needed, encrypt_value
 from app.models.settings import Settings
 
 
@@ -71,7 +71,10 @@ class SettingsService:
 
     async def get_default_model(self) -> str:
         """Get the default model."""
-        return await self.get("default_model", "anthropic/claude-3.5-sonnet") or "anthropic/claude-3.5-sonnet"
+        return (
+            await self.get("default_model", "anthropic/claude-3.5-sonnet")
+            or "anthropic/claude-3.5-sonnet"
+        )
 
     async def set_default_model(self, model: str) -> None:
         """Set the default model."""

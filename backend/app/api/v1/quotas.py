@@ -1,6 +1,6 @@
 """Quota management API endpoints."""
 
-from typing import Annotated, Optional
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,8 +57,12 @@ async def update_global_quota(
     # Get old values for audit
     old_quota = await quota_service.get_or_create_global_quota()
     old_values = {
-        "daily_cost_limit_usd": float(old_quota.daily_cost_limit_usd) if old_quota.daily_cost_limit_usd else None,
-        "monthly_cost_limit_usd": float(old_quota.monthly_cost_limit_usd) if old_quota.monthly_cost_limit_usd else None,
+        "daily_cost_limit_usd": float(old_quota.daily_cost_limit_usd)
+        if old_quota.daily_cost_limit_usd
+        else None,
+        "monthly_cost_limit_usd": float(old_quota.monthly_cost_limit_usd)
+        if old_quota.monthly_cost_limit_usd
+        else None,
         "daily_token_limit": old_quota.daily_token_limit,
         "monthly_token_limit": old_quota.monthly_token_limit,
         "alert_threshold_percent": old_quota.alert_threshold_percent,
@@ -75,8 +79,12 @@ async def update_global_quota(
     )
 
     new_values = {
-        "daily_cost_limit_usd": float(quota.daily_cost_limit_usd) if quota.daily_cost_limit_usd else None,
-        "monthly_cost_limit_usd": float(quota.monthly_cost_limit_usd) if quota.monthly_cost_limit_usd else None,
+        "daily_cost_limit_usd": float(quota.daily_cost_limit_usd)
+        if quota.daily_cost_limit_usd
+        else None,
+        "monthly_cost_limit_usd": float(quota.monthly_cost_limit_usd)
+        if quota.monthly_cost_limit_usd
+        else None,
         "daily_token_limit": quota.daily_token_limit,
         "monthly_token_limit": quota.monthly_token_limit,
         "alert_threshold_percent": quota.alert_threshold_percent,

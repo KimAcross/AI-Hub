@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -12,6 +12,8 @@ from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.models.conversation import Conversation
+
+JSON_FIELD = JSON().with_variant(JSONB, "postgresql")
 
 
 class Message(Base):
@@ -32,17 +34,19 @@ class Message(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    tokens_used: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    tokens_used: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON_FIELD, nullable=True
+    )
+    feedback: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    feedback_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    feedback_context: Mapped[Optional[dict[str, Any]]] = mapped_column(
+        JSON_FIELD, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         nullable=False,
     )
-
-    # Feedback fields
-    feedback: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    feedback_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    feedback_context: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 
     # Relationships
     conversation: Mapped["Conversation"] = relationship(

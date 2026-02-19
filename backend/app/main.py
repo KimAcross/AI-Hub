@@ -1,6 +1,8 @@
 """FastAPI application entry point."""
 
 import asyncio
+import logging
+import uuid
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -13,38 +15,40 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.exceptions import AIAcrossException
 from app.core.logging import (
-    generate_request_id,
-    get_logger,
-    request_id_var,
-    setup_logging,
-    user_id_var,
+    clear_request_context,
+    configure_logging,
+    set_request_context,
 )
 from app.core.rate_limit import get_limiter, rate_limit_exceeded_handler
+from app.db.session import async_session_maker
+from app.services.ingestion_reaper import IngestionReaper
+from app.services.admin_auth_service import get_admin_auth_service
 
-logger = get_logger(__name__)
+from jose import JWTError, jwt
+
+configure_logging()
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler for startup and shutdown events."""
-    # Startup — configure logging first
-    setup_logging(log_level=settings.log_level, log_format=settings.log_format)
+    # Startup
     logger.info(f"Starting {settings.app_name} in {settings.app_env} mode...")
     if settings.is_production:
         logger.info("Production mode: API docs disabled, strict CORS enabled")
-
-    # Start ingestion reaper background task
-    from app.services.ingestion_reaper import get_ingestion_reaper
-
-    reaper = get_ingestion_reaper()
-    reaper_task = asyncio.create_task(reaper.run())
-
+    reaper_task = None
+    if settings.app_env.lower() != "testing":
+        reaper_task = asyncio.create_task(run_ingestion_reaper_loop())
     yield
-
     # Shutdown
-    reaper.stop()
-    reaper_task.cancel()
+    if reaper_task:
+        reaper_task.cancel()
+        try:
+            await reaper_task
+        except asyncio.CancelledError:
+            logger.info("Ingestion reaper stopped")
     logger.info(f"Shutting down {settings.app_name}...")
 
 
@@ -96,34 +100,6 @@ else:
     )
 
 
-class RequestContextMiddleware(BaseHTTPMiddleware):
-    """Inject request_id and user context into every request for log correlation."""
-
-    async def dispatch(self, request: Request, call_next):
-        rid = generate_request_id()
-        request_id_var.set(rid)
-
-        # Extract user_id from Authorization header (JWT) if present
-        auth_header = request.headers.get("authorization", "")
-        if auth_header.startswith("Bearer "):
-            try:
-                from jose import jwt
-
-                token = auth_header[7:]
-                payload = jwt.decode(
-                    token, settings.secret_key, algorithms=["HS256"],
-                    options={"verify_exp": False},
-                )
-                if sub := payload.get("sub"):
-                    user_id_var.set(str(sub))
-            except Exception:
-                pass
-
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = rid
-        return response
-
-
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
@@ -132,7 +108,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=()"
+        )
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self'; "
@@ -148,8 +126,58 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app.add_middleware(RequestContextMiddleware)
+def _extract_user_id_from_token(request: Request) -> str | None:
+    """Best-effort extraction of user_id from authentication token."""
+    token = request.headers.get("X-Admin-Token")
+    if not token:
+        return None
+
+    admin_payload = get_admin_auth_service().verify_token(token)
+    if admin_payload:
+        sub = admin_payload.get("sub")
+        return None if sub == "admin" else str(sub)
+
+    try:
+        payload = jwt.decode(token, settings.secret_key, algorithms=["HS256"])
+    except JWTError:
+        return None
+
+    sub = payload.get("sub")
+    return str(sub) if sub else None
+
+
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    """Inject per-request correlation context and response headers."""
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = str(uuid.uuid4())
+        user_id = _extract_user_id_from_token(request)
+
+        set_request_context(request_id=request_id, user_id=user_id)
+        try:
+            response = await call_next(request)
+            response.headers["X-Request-ID"] = request_id
+            return response
+        finally:
+            clear_request_context()
+
+
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestContextMiddleware)
+
+
+async def run_ingestion_reaper_loop() -> None:
+    """Run periodic ingestion recovery in a background task."""
+    await asyncio.sleep(2)
+    while True:
+        try:
+            async with async_session_maker() as session:
+                reaper = IngestionReaper(session)
+                await reaper.run_once()
+                await session.commit()
+        except Exception:
+            logger.exception("Ingestion reaper iteration failed")
+        await asyncio.sleep(settings.ingestion_reaper_interval_seconds)
 
 
 @app.exception_handler(AIAcrossException)

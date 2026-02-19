@@ -43,13 +43,13 @@ class Assistant(Base):
     max_retrieval_chunks: Mapped[int] = mapped_column(nullable=False, default=5)
     max_context_tokens: Mapped[int] = mapped_column(nullable=False, default=4000)
     avatar_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workspaces.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

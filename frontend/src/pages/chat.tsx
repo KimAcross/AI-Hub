@@ -11,14 +11,13 @@ import {
   useExportConversation,
   useModels,
   useAssistant,
-  useAssistants,
+  useSettings,
   conversationKeys,
 } from '@/hooks'
 import { useAppStore } from '@/stores/app-store'
 import { conversationsApi } from '@/lib/api'
-import { Header } from '@/components/layout/header'
 import toast from 'react-hot-toast'
-import type { Message } from '@/types'
+import type { Message, MessageFeedback } from '@/types'
 
 const DEFAULT_MODEL = 'anthropic/claude-3.5-sonnet'
 
@@ -35,7 +34,7 @@ export function ChatPage() {
   const [selectedModel, setSelectedModel] = React.useState(DEFAULT_MODEL)
   const [isStreaming, setIsStreaming] = React.useState(false)
   const [streamingContent, setStreamingContent] = React.useState('')
-  const { selectedAssistantId } = useAppStore()
+  const { selectedAssistantId, setSelectedAssistantId } = useAppStore()
   const abortControllerRef = React.useRef<AbortController | null>(null)
 
   // Edit message state
@@ -46,9 +45,6 @@ export function ChatPage() {
   const activeAssistantId = assistantIdParam || selectedAssistantId
 
   // Queries
-  const { data: assistants = [] } = useAssistants()
-  const activeAssistants = assistants.filter((a) => !a.is_deleted)
-
   const { data: conversations = [], isLoading: isLoadingConversations } = useConversations(
     activeAssistantId || undefined
   )
@@ -57,6 +53,7 @@ export function ChatPage() {
   )
   const { data: models = [], isLoading: isLoadingModels } = useModels()
   const { data: assistant } = useAssistant(activeAssistantId || '')
+  const { data: settings } = useSettings()
 
   // Mutations
   const createConversation = useCreateConversation()
@@ -64,12 +61,18 @@ export function ChatPage() {
   const deleteConversation = useDeleteConversation()
   const exportConversation = useExportConversation()
 
-  // Initialize model from assistant settings
+  // Initialize model from context:
+  // assistant chat -> assistant model, general chat -> app default model
   React.useEffect(() => {
-    if (assistant?.model) {
+    if (activeAssistantId && assistant?.model) {
       setSelectedModel(assistant.model)
+      return
     }
-  }, [assistant])
+
+    if (!activeAssistantId && settings?.default_model) {
+      setSelectedModel(settings.default_model)
+    }
+  }, [activeAssistantId, assistant?.model, settings?.default_model])
 
   // Sync URL params
   React.useEffect(() => {
@@ -87,6 +90,10 @@ export function ChatPage() {
   // Handle conversation selection
   const handleSelectConversation = (id: string) => {
     setSelectedConversationId(id)
+    const selectedConversation = conversations.find((c) => c.id === id)
+    if (selectedConversation?.assistant_id) {
+      setSelectedAssistantId(selectedConversation.assistant_id)
+    }
   }
 
   // Handle conversation delete
@@ -113,9 +120,14 @@ export function ChatPage() {
 
     // Create conversation if needed
     if (!conversationId) {
+      if (!activeAssistantId) {
+        toast.error('Please choose an assistant before starting a new chat')
+        return
+      }
+
       try {
         const newConversation = await createConversation.mutateAsync({
-          ...(activeAssistantId ? { assistant_id: activeAssistantId } : {}),
+          assistant_id: activeAssistantId,
           title: content.slice(0, 50) + (content.length > 50 ? '...' : ''),
         })
         conversationId = newConversation.id
@@ -238,21 +250,6 @@ export function ChatPage() {
     }
   }
 
-  // Handle feedback on assistant message
-  const handleFeedback = async (messageId: string, feedback: 'positive' | 'negative', reason?: string) => {
-    if (!selectedConversationId) return
-
-    try {
-      await conversationsApi.submitFeedback(selectedConversationId, messageId, feedback, reason)
-      // Refresh conversation to reflect feedback state
-      queryClient.invalidateQueries({
-        queryKey: conversationKeys.detail(selectedConversationId),
-      })
-    } catch {
-      toast.error('Failed to submit feedback')
-    }
-  }
-
   // Handle regenerate response
   const handleRegenerate = async (messageId: string) => {
     if (!selectedConversationId || isStreaming) return
@@ -293,6 +290,22 @@ export function ChatPage() {
     }
   }
 
+  const handleMessageFeedback = async (
+    messageId: string,
+    feedback: MessageFeedback
+  ) => {
+    if (!selectedConversationId) return
+    try {
+      await conversationsApi.submitFeedback(selectedConversationId, messageId, feedback)
+      queryClient.invalidateQueries({
+        queryKey: conversationKeys.detail(selectedConversationId),
+      })
+      toast.success('Feedback saved')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save feedback')
+    }
+  }
+
   // Cleanup on unmount
   React.useEffect(() => {
     return () => {
@@ -301,12 +314,6 @@ export function ChatPage() {
       }
     }
   }, [])
-
-  // Handle assistant selection
-  const handleSelectAssistant = (assistantId: string) => {
-    setSelectedConversationId(null)
-    setSearchParams({ assistant: assistantId }, { replace: true })
-  }
 
   // Messages from conversation
   const messages = conversation?.messages || []
@@ -335,14 +342,12 @@ export function ChatPage() {
         onStopGeneration={handleStopGeneration}
         onRegenerate={handleRegenerate}
         onEditMessage={handleEditMessage}
-        onFeedback={handleFeedback}
+        onFeedback={handleMessageFeedback}
         streamingContent={streamingContent}
         isStreaming={isStreaming}
         isLoadingMessages={isLoadingConversation}
         isLoadingModels={isLoadingModels}
         assistant={assistant}
-        assistants={activeAssistants}
-        onAssistantChange={handleSelectAssistant}
         conversationTitle={conversation?.title}
       />
 

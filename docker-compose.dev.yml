@@ -27,8 +27,6 @@ services:
       - ./backend:/app
       - backend_uploads:/app/data/uploads
       - backend_chroma:/app/data/chroma
-    env_file:
-      - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://aiacross:aiacross@db:5432/aiacross
       - CHROMA_PERSIST_DIR=/app/data/chroma
@@ -60,7 +58,7 @@ services:
       - "5173:5173"
     environment:
       - VITE_API_URL=http://localhost:8000
-      - API_TARGET=http://backend:8000
+      - VITE_API_PROXY_TARGET=http://backend:8000
     depends_on:
       - backend
     restart: unless-stopped

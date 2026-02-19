@@ -36,11 +36,13 @@ class AssistantService:
             model=data.model,
             temperature=data.temperature,
             max_tokens=data.max_tokens,
+            max_retrieval_chunks=data.max_retrieval_chunks,
+            max_context_tokens=data.max_context_tokens,
             avatar_url=data.avatar_url,
         )
         self.db.add(assistant)
         await self.db.flush()
-        await self.db.refresh(assistant, ["knowledge_files"])
+        await self.db.refresh(assistant)
         return assistant
 
     async def create_from_template(self, template_id: str) -> Assistant:
@@ -102,7 +104,7 @@ class AssistantService:
             setattr(assistant, field, value)
 
         await self.db.flush()
-        await self.db.refresh(assistant, ["knowledge_files"])
+        await self.db.refresh(assistant)
         return assistant
 
     async def delete_assistant(self, assistant_id: UUID) -> None:
@@ -124,7 +126,7 @@ class AssistantService:
 
         assistant.is_deleted = False
         await self.db.flush()
-        await self.db.refresh(assistant, ["knowledge_files"])
+        await self.db.refresh(assistant)
         return assistant
 
     async def get_file_count(self, assistant_id: UUID) -> int:
@@ -157,6 +159,8 @@ def assistant_to_response(assistant: Assistant) -> AssistantResponse:
         model=assistant.model,
         temperature=assistant.temperature,
         max_tokens=assistant.max_tokens,
+        max_retrieval_chunks=assistant.max_retrieval_chunks,
+        max_context_tokens=assistant.max_context_tokens,
         avatar_url=assistant.avatar_url,
         file_count=file_count,
         is_deleted=assistant.is_deleted,

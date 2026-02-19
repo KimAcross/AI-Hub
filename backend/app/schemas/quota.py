@@ -43,11 +43,17 @@ class QuotaResponse(BaseModel):
     id: UUID = Field(description="Quota's unique ID")
     scope: QuotaScope = Field(description="Quota scope (global or user)")
     scope_id: Optional[str] = Field(None, description="User ID if scope is user")
-    daily_cost_limit_usd: Optional[Decimal] = Field(None, description="Daily cost limit in USD")
-    monthly_cost_limit_usd: Optional[Decimal] = Field(None, description="Monthly cost limit in USD")
+    daily_cost_limit_usd: Optional[Decimal] = Field(
+        None, description="Daily cost limit in USD"
+    )
+    monthly_cost_limit_usd: Optional[Decimal] = Field(
+        None, description="Monthly cost limit in USD"
+    )
     daily_token_limit: Optional[int] = Field(None, description="Daily token limit")
     monthly_token_limit: Optional[int] = Field(None, description="Monthly token limit")
-    requests_per_minute: Optional[int] = Field(None, description="Rate limit per minute")
+    requests_per_minute: Optional[int] = Field(
+        None, description="Rate limit per minute"
+    )
     requests_per_hour: Optional[int] = Field(None, description="Rate limit per hour")
     alert_threshold_percent: int = Field(description="Alert threshold percentage")
 
@@ -58,17 +64,29 @@ class UsageStatusResponse(BaseModel):
     """Response schema for current usage status."""
 
     daily_cost_used: float = Field(description="Today's cost in USD")
-    daily_cost_limit: Optional[float] = Field(None, description="Daily cost limit in USD")
-    daily_cost_percent: Optional[float] = Field(None, description="Percentage of daily cost limit used")
+    daily_cost_limit: Optional[float] = Field(
+        None, description="Daily cost limit in USD"
+    )
+    daily_cost_percent: Optional[float] = Field(
+        None, description="Percentage of daily cost limit used"
+    )
     monthly_cost_used: float = Field(description="This month's cost in USD")
-    monthly_cost_limit: Optional[float] = Field(None, description="Monthly cost limit in USD")
-    monthly_cost_percent: Optional[float] = Field(None, description="Percentage of monthly cost limit used")
+    monthly_cost_limit: Optional[float] = Field(
+        None, description="Monthly cost limit in USD"
+    )
+    monthly_cost_percent: Optional[float] = Field(
+        None, description="Percentage of monthly cost limit used"
+    )
     daily_tokens_used: int = Field(description="Today's token usage")
     daily_token_limit: Optional[int] = Field(None, description="Daily token limit")
-    daily_token_percent: Optional[float] = Field(None, description="Percentage of daily token limit used")
+    daily_token_percent: Optional[float] = Field(
+        None, description="Percentage of daily token limit used"
+    )
     monthly_tokens_used: int = Field(description="This month's token usage")
     monthly_token_limit: Optional[int] = Field(None, description="Monthly token limit")
-    monthly_token_percent: Optional[float] = Field(None, description="Percentage of monthly token limit used")
+    monthly_token_percent: Optional[float] = Field(
+        None, description="Percentage of monthly token limit used"
+    )
 
 
 class QuotaAlertResponse(BaseModel):

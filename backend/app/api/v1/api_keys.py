@@ -28,7 +28,11 @@ router = APIRouter(prefix="/admin/api-keys", tags=["Admin - API Keys"])
 def _key_to_response(key, secret_key: str) -> APIKeyResponse:
     """Convert APIKey model to response with masked key."""
     decrypted = decrypt_value(key.encrypted_key, secret_key)
-    masked = f"{decrypted[:4]}...{decrypted[-4:]}" if len(decrypted) > 8 else "*" * len(decrypted)
+    masked = (
+        f"{decrypted[:4]}...{decrypted[-4:]}"
+        if len(decrypted) > 8
+        else "*" * len(decrypted)
+    )
 
     return APIKeyResponse(
         id=key.id,

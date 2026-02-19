@@ -15,10 +15,6 @@ import {
 } from '@/components/ui/table'
 import {
   Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
 } from '@/components/ui/select'
 import {
   Dialog,
@@ -272,38 +268,26 @@ function AuditLogsPageContent() {
                 setActionFilter(v)
                 setQuery({ ...query, offset: 0 })
               }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                {uniqueActions.map((action) => (
-                  <SelectItem key={action} value={action}>
-                    {action}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                { value: 'all', label: 'All Actions' },
+                ...uniqueActions.map((action) => ({ value: action, label: action })),
+              ]}
+              placeholder="Action"
+              className="w-[150px]"
+            />
             <Select
               value={resourceFilter}
               onValueChange={(v) => {
                 setResourceFilter(v)
                 setQuery({ ...query, offset: 0 })
               }}
-            >
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Resource" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Resources</SelectItem>
-                {resourceTypes.map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={[
+                { value: 'all', label: 'All Resources' },
+                ...resourceTypes.map((type) => ({ value: type, label: type })),
+              ]}
+              placeholder="Resource"
+              className="w-[150px]"
+            />
           </div>
 
           {/* Table */}

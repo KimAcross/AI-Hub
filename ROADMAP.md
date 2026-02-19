@@ -2,6 +2,8 @@
 
 This document outlines the development phases, milestones, and future vision for AI-Across.
 
+**Last Updated:** February 19, 2026
+
 ## Current Status
 
 | Phase | Status | Progress |
@@ -16,6 +18,36 @@ This document outlines the development phases, milestones, and future vision for
 | Phase 8: Production Deployment | Complete | 100% |
 | Phase 9: Admin Dashboard Enhancement | Complete | 100% |
 | Phase 10: Security Hardening & User Auth | Complete | 100% |
+| Phase 11: Admin User Governance & Usage Analytics | Planned | 0% |
+
+## Execution Snapshot (Now, Next, Later)
+
+### Now (active)
+- **v1.1 - Agency Workflow + Team Productivity**
+  - Projects/client isolation, assistant versioning, saved outputs, prompt library, and team collaboration workflows.
+
+### Later
+- **Phase 11 / v1.2 scope - Admin User Governance & Usage Analytics**
+  - Expand admin user operations and usage analytics with daily/monthly per-user reporting and exports.
+- **v1.2 (remaining scope)**
+  - Admin power features, governance/privacy, operational maturity, and UX polish.
+- **v1.3**
+  - Integrations (Telegram first).
+
+### Post-v0.9 Stabilization (Completed, Unreleased)
+
+- Assistant card routing now opens chat with assistant context (`/chat?assistant=<id>`), while preserving 3-dot admin actions.
+- Chat model initialization aligned:
+  - Assistant chat -> assistant model
+  - General chat -> settings default model
+  - User override remains available in model dropdown
+- OpenRouter key resolution aligned across runtime:
+  - DB settings key first, env fallback
+  - Applied to models listing and conversation chat service
+- Chat/runtime reliability fixes:
+  - SSE parser compatibility for backend `done` event format
+  - Async serialization fixes for conversation/auth paths (`MissingGreenlet`)
+  - API payload normalization and validation-error rendering fixes in frontend
 
 ---
 
@@ -378,61 +410,96 @@ frontend/src/
 
 > **Context:** Following an external code review (Feb 2026) that scored the project 8.5/10 on build quality but 5.5/10 on operational readiness, this phase was refined into 7 concrete steps focused on shipping to production safely with minimal new surface area.
 
-### Deliverables
+### Completed
 
-#### Infrastructure
 - [x] Nginx reverse proxy configuration with security headers and rate limiting
 - [x] Production Docker Compose with multi-stage builds and non-root user
 - [x] Health check endpoints (`/health`, `/ready`)
 - [x] Multi-stage Dockerfiles with security hardening
 - [x] Development Docker Compose with hot-reload
 
-#### Step 1: GitHub Actions CI Pipeline
+### Step 1: GitHub Actions CI Pipeline
+
+**Goal:** Automated quality gate on every PR.
+
 - [x] `.github/workflows/ci.yml` with parallel backend + frontend jobs
 - [x] **Backend job:** `ruff check` + `ruff format --check`, `alembic upgrade head` on empty test DB (migration sanity check), `pytest --tb=short`
 - [x] **Frontend job:** `npm run lint`, `npm run test:run` (Vitest), `npm run build` (TypeScript + bundle)
-- [ ] **E2E smoke** (optional, deferred — existing E2E tests need auth flow updates first)
+- [x] **E2E smoke** (optional, `main` branch only or nightly): 1-2 Playwright tests against docker-compose stack
+- [x] Stabilize CI baseline so Step 1 is green by default (updated backend tests/fixtures to authenticated expectations after Phase 10 auth hardening)
 
-#### Step 2: Structured Logging + Request Correlation IDs
+### Step 2: Structured Logging + Request Correlation IDs
+
+**Goal:** JSON logs with contextual fields for fast incident debugging.
+
+Every log line includes (when available):
+- `request_id` (UUID per request), `user_id` (from JWT), `conversation_id`, `assistant_id`
+- `model`, `provider`, `latency_ms`, `tokens` (for LLM calls)
+
 - [x] `backend/app/core/logging.py` — JSON formatter (`python-json-logger`), contextvars, `get_logger()` helper
-- [x] `RequestContextMiddleware` in `main.py` — generates `request_id`, extracts `user_id` from JWT, sets contextvars, adds `X-Request-ID` response header
+- [x] `RequestContextMiddleware` in `main.py` — generates request_id, extracts user_id from JWT, sets contextvars, adds `X-Request-ID` response header
 - [x] Structured logs in `openrouter_service.py` (model, latency, tokens), `conversation_service.py` (conversation/assistant context), `file_processor.py` (ingestion pipeline)
 - [x] Config: `log_level`, `log_format` settings in `config.py`
 
-#### Step 3: Self-Healing File Ingestion
-- [x] `processing_started_at`, `attempt_count`, `max_attempts`, `next_retry_at`, `last_error` columns on `knowledge_files`
+### Step 3: Self-Healing File Ingestion
+
+**Goal:** Make file processing resilient without a separate worker container. Stuck files recover automatically with retries and exponential backoff.
+
+- [x] Add to `knowledge_files` table: `processing_started_at`, `attempt_count`, `max_attempts` (default 3), `next_retry_at`, `last_error`
 - [x] Alembic migration `005_add_ingestion_resilience.py`
-- [x] `backend/app/services/ingestion_reaper.py` — periodic asyncio task (every 5 min): detects stuck files (>15 min), retries with exponential backoff (5min → 15min → 45min), caps at `max_attempts`, preserves `last_error`
-- [x] `file_processor.py` updated — sets `processing_started_at`, stores errors in `last_error`
+- [x] `backend/app/services/ingestion_reaper.py` — periodic task (every 5 min via `asyncio.create_task` in app lifespan):
+  - Finds `status='processing'` older than 15 min TTL
+  - Retries with exponential backoff (5min → 15min → 45min), caps at `max_attempts`
+  - Sets `status='failed'` after max attempts, preserves `last_error`
+  - Picks up `pending` files where `next_retry_at <= now()` and re-triggers processing
+- [x] Update `file_processor.py` — set `processing_started_at`, store errors in `last_error`
 
-#### Step 4: Backup & Restore
-- [x] `docker/scripts/backup.sh` — `pg_dump` + tar uploads + tar chroma → timestamped directory, auto-rotation
-- [x] `docker/scripts/restore.sh` — restore from backup directory with confirmation prompt and health check
-- [x] `docs/BACKUP.md` — runbook: what's backed up, schedule, retention, step-by-step restore, restore drill instructions
+### Step 4: Backup & Restore
 
-#### Step 5: Message Feedback (Thumbs Up/Down)
-- [x] `feedback`, `feedback_reason`, `feedback_context` (JSONB) columns on `messages` table
+**Goal:** Automated daily backups with a tested restore procedure.
+
+- [x] `docker/scripts/backup.sh` — `pg_dump` + tar uploads + tar chroma → timestamped directory, rotate keeping last N days
+- [x] `docker/scripts/restore.sh` — restore from backup directory with confirmation prompt
+- [x] `docs/BACKUP.md` — runbook: what's backed up, schedule, retention, step-by-step restore, **restore drill instructions**
+- [x] Backup service in `docker-compose.yml` (cron container) or documented host cron setup
+- [x] `.env.example` additions: `BACKUP_DIR`, `BACKUP_RETENTION_DAYS`
+
+### Step 5: Message Feedback (Thumbs Up/Down)
+
+**Goal:** Capture quality signal on AI outputs for understanding what works.
+
+- [x] Add to `messages` table: `feedback` (positive/negative/null), `feedback_reason` (optional text), `feedback_context` (JSONB - model, retrieval_doc_ids at feedback time)
 - [x] Alembic migration `006_add_message_feedback.py`
-- [x] `POST /conversations/{id}/messages/{msg_id}/feedback` endpoint (idempotent, captures model context)
-- [x] Frontend: ThumbsUp/ThumbsDown on assistant messages, optional reason input on negative feedback
+- [x] `POST /conversations/{id}/messages/{msg_id}/feedback` endpoint
+- [x] Frontend: thumbs up/down buttons on assistant messages, optional "Why?" input on negative feedback
 
-#### Step 6: Workspace ID Column (Client Isolation Future-Proofing)
+### Step 6: Workspace ID Column (Client Isolation Future-Proofing)
+
+**Goal:** Add `workspace_id` to core tables now with zero UI/behavior changes. Makes future client isolation a UI task, not a schema redesign.
+
 - [x] `backend/app/models/workspace.py` — minimal model: `id`, `name`, `slug` (unique), `created_at`
-- [x] Alembic migration `007_add_workspace_id.py` — creates `workspaces` table, inserts default workspace, adds `workspace_id` FK to `assistants`, `conversations`, `knowledge_files`, backfills existing rows, adds indexes
-- [x] No frontend changes, no API changes, no behavior changes
+- [x] Alembic migration `007_add_workspace_id.py`:
+  - Creates `workspaces` table, inserts default workspace
+  - Adds `workspace_id` (nullable UUID FK) to: `assistants`, `conversations`, `knowledge_files`
+  - Backfills existing rows to default workspace
+  - Adds index on `workspace_id` per table
+- [x] No frontend behavior changes required; schema and model groundwork only
 
-#### Step 7: RAG Guardrails (Per-Assistant Caps)
-- [x] `max_retrieval_chunks` (default 5), `max_context_tokens` (default 4000) columns on `assistants` table
+### Step 7: RAG Guardrails (Per-Assistant Caps)
+
+**Goal:** Prevent runaway context and cost from retrieval. Per-assistant configurable limits.
+
+- [x] Add to `assistants` table: `max_retrieval_chunks` (default 5), `max_context_tokens` (default 4000)
 - [x] Alembic migration `008_add_rag_guardrails.py`
-- [x] `rag_service.py` respects per-assistant limits via `get_augmented_prompt()` parameters
-- [x] Assistant create/update schemas and form with collapsible "Advanced: RAG Settings" section
+- [x] Update `rag_service.py` — respect per-assistant limits (currently hardcoded top-5, 0.7 threshold)
+- [x] Update assistant create/update schemas and form with "Advanced: RAG Settings" section
 
 ### Remaining Infrastructure
 
-- [ ] SSL/TLS certificate setup (Let's Encrypt / Certbot)
-- [ ] VPS deployment guide (Ubuntu 22.04+)
-- [ ] Configuration reference documentation
-- [ ] Troubleshooting guide
+- [x] SSL/TLS certificate setup (Let's Encrypt / Certbot)
+- [x] VPS deployment guide (Ubuntu 22.04+)
+- [x] Configuration reference documentation
+- [x] Troubleshooting guide
 
 ### Production Architecture
 
@@ -785,6 +852,85 @@ CREATE INDEX ix_conversations_user_id ON conversations(user_id);
 
 ---
 
+## Phase 11: Admin User Governance & Usage Analytics
+
+**Status:** Planned (0%)
+
+### Goal
+
+Extend the existing admin tooling so admins can fully manage users and analyze usage trends with daily and monthly granularity.
+This phase builds on Phase 9/10 foundations and closes visibility and governance gaps for day-to-day admin operations.
+
+### Deliverables
+
+#### User Management (Admin Dashboard)
+- [ ] Users table with server-side pagination, search, and role/status filters
+- [ ] Full user lifecycle actions:
+  - Create user
+  - Edit profile (name, email, role)
+  - Activate/deactivate user
+  - Force password reset
+  - Revoke active sessions
+- [ ] User detail page with:
+  - Account metadata (created date, last login, status, role)
+  - Assigned quotas and budget limits
+  - Recent activity and audit trail entries
+- [ ] Bulk actions for admins:
+  - Bulk activate/deactivate
+  - Bulk role change (safe-guarded)
+  - CSV export of selected users
+
+#### Usage Analytics (Per User)
+- [ ] Daily usage tracking per user:
+  - Request count
+  - Input/output tokens
+  - Estimated cost
+  - Model/provider breakdown
+- [ ] Monthly aggregates per user with period-over-period comparison
+- [ ] Dashboard visualizations:
+  - Daily trend chart (30/90 day views)
+  - Monthly trend chart (6/12 month views)
+  - Top users by cost/tokens/requests
+- [ ] Date range and dimension filters:
+  - User
+  - Role
+  - Model/provider
+  - Assistant
+- [ ] Export options:
+  - CSV for filtered table views
+  - Monthly usage report download
+
+#### Alerting & Governance
+- [ ] Usage anomaly alerts (daily spike threshold per user)
+- [ ] Monthly budget overrun alerts per user
+- [ ] Admin notifications center for usage and account events
+
+### API & Data Requirements
+- [ ] Admin usage endpoints:
+  - `GET /api/v1/admin/usage/users/daily`
+  - `GET /api/v1/admin/usage/users/monthly`
+  - `GET /api/v1/admin/usage/users/{id}/timeseries`
+- [ ] Add/verify indexes for usage queries:
+  - `(user_id, created_at)`
+  - `(created_at)`
+  - `(user_id, model)`
+- [ ] Materialized daily rollup strategy (or cached aggregate table) for fast dashboard loading
+- [ ] UTC-based aggregation with explicit timezone conversion in UI
+
+### Success Criteria
+
+- Admin can manage all users from a single dashboard flow without CLI/database intervention.
+- Admin can view accurate daily and monthly usage per user in under 2 seconds for standard date ranges.
+- Monthly totals in dashboard match billing/usage source of truth.
+- Exports are consistent with on-screen filtered data.
+
+### Dependencies
+
+- Requires stable event/usage ingestion and token accounting from Phase 8 production hardening.
+- Should align with v1.2 operational maturity and governance goals.
+
+---
+
 ## Post-MVP Roadmap
 
 > **Scope note:** AI-Across is an internal MarketAcross tool (~50 employees), not a SaaS product. The roadmap below focuses exclusively on features that serve the internal content team.
@@ -807,19 +953,6 @@ An external developer conducted a full review of the v0.9.0 codebase and scored:
 **Architectural risks flagged:** ChromaDB scaling for multi-instance, multi-user data partitioning (row-level access), cost controls beyond quotas.
 
 The Phase 8 steps and v1.1/v1.2 roadmap items above directly address these findings.
-
----
-
-### Previously Completed (v0.8–v0.9)
-
-- [x] Multi-user accounts with roles (Admin, Manager, User) - *Phase 9*
-- [x] User management interface (invite, deactivate, reset password) - *Phase 9*
-- [x] Per-user usage tracking and cost attribution - *Phase 10*
-- [x] Usage quotas with rate limits - *Phase 9*
-- [x] Activity audit log - *Phase 9*
-- [x] Budget limits and alerts per user - *Phase 9*
-- [x] JWT authentication with RBAC - *Phase 9*
-- [x] Conversation user isolation - *Phase 10*
 
 ---
 
@@ -848,6 +981,9 @@ The Phase 8 steps and v1.1/v1.2 roadmap items above directly address these findi
 - [ ] "Save as draft" button on assistant messages in chat
 - [ ] Outputs page with search/filter by project and tags
 - [ ] Export saved outputs (Markdown, plain text)
+- [ ] Draft approval workflow:
+  - Approve draft (freeze revision snapshot)
+  - Continue editing with AI (create derived revision)
 
 #### Prompt Library
 - [ ] `Prompt` model: user_id, project_id, title, content, category, is_shared, usage_count
@@ -874,6 +1010,36 @@ The Phase 8 steps and v1.1/v1.2 roadmap items above directly address these findi
 ### Version 1.2 - Admin Power Features + Operational Maturity
 
 **Theme:** Admin tooling, content quality, and operational hardening.
+
+#### Approved Content Pipeline (Planning)
+- [ ] Add draft lifecycle states for outputs: `draft`, `in_review`, `approved`, `published`
+- [ ] Add explicit user actions in chat/output UI:
+  - Approve draft
+  - Keep editing with AI
+- [ ] On approval, trigger branded document generation workflow:
+  - Option A: n8n webhook orchestration
+  - Option B: internal background worker/job queue
+- [ ] Generate full branded Google Doc from approved snapshot using assistant/project/client template
+- [ ] Support export/download formats for approved outputs:
+  - Google Doc link
+  - DOCX
+  - PDF
+  - Markdown
+- [ ] Add "Approved Content Library" page with filtering by assistant (agent), date, project, and status
+- [ ] Track and report approved content counts per assistant/agent over time
+
+**Technical Requirements (Planning Reference):**
+- Approval must be idempotent (avoid duplicate generation on repeated clicks)
+- Preserve revision lineage:
+  - `source_draft_id`
+  - `approved_revision_id`
+  - `derived_revision_id`
+- Store generation metadata:
+  - workflow provider (`n8n`/internal)
+  - template ID/version
+  - generation/export status
+  - document links
+  - last error
 
 #### Admin Power Features
 - [ ] Custom assistant templates (save your own configurations as reusable templates)
@@ -929,9 +1095,10 @@ The Phase 8 steps and v1.1/v1.2 roadmap items above directly address these findi
 | Admin Ready | Phase 7 Complete | Admin board with usage tracking |
 | v0.8.0 | Phase 9 Complete | Admin dashboard enhancement (multi-user, quotas, audit) |
 | v0.9.0 | Phase 10 Complete | Security hardening, user auth, role-based UI |
-| v1.0 | Phase 8 Complete ✅ | Production deployment: CI, structured logging, self-healing ingestion, backups, feedback, workspace_id, RAG guardrails |
+| v1.0 | Phase 8 Complete | Production deployment: CI, structured logging, self-healing ingestion, backups, feedback, workspace_id, RAG guardrails |
 | v1.1 | After v1.0 | Agency workflow: projects/client isolation, assistant versioning, saved outputs, prompt library, team productivity |
-| v1.2 | After v1.1 | Admin power features, data governance, operational maturity, UX polish |
+| Phase 11 | Within v1.2 | Admin user governance and daily/monthly per-user usage analytics |
+| v1.2 | After v1.1 | Admin power features, user governance, usage analytics, data governance, operational maturity, UX polish |
 | v1.3 | After v1.2 | Telegram integration |
 
 ---
@@ -952,11 +1119,11 @@ The Phase 8 steps and v1.1/v1.2 roadmap items above directly address these findi
 | Item | Priority | Description |
 |------|----------|-------------|
 | ChromaDB scaling | Medium | Single-host embedded store. For multi-instance/HA: migrate to pgvector (simpler ops) or managed vector DB. Fine for current single-host deployment. |
-| Multi-user data partitioning | Medium | `workspace_id` column added and backfilled (Phase 8 Step 6), but row-level filtering not yet enforced. Systematic workspace_id scoping needed before client data isolation (planned for v1.1). |
+| Multi-user data partitioning | Medium | `workspace_id` column added in Phase 8 Step 6, but row-level filtering not yet enforced. Systematic owner_id/team_id/workspace_id scoping needed before client data isolation. |
 | File storage | Low | Move to S3-compatible storage for multi-instance |
 | Real-time updates | Medium | Consider WebSocket for live conversation sync |
 | Caching layer | Low | Add Redis for session/response caching |
-| Cost guardrails | Low | Per-assistant RAG caps implemented (Phase 8 Step 7). Expensive model gating planned for v1.2. |
+| Cost guardrails | Medium | Per-assistant max tokens and expensive model gating (beyond existing user-level quotas). Planned for v1.2. |
 
 ---
 
@@ -1032,3 +1199,5 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and release notes.
 ### Architecture Decision Records (ADRs)
 
 Future significant technical decisions should be documented as ADRs in the `/docs/adr/` directory.
+
+

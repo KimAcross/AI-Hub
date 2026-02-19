@@ -122,7 +122,10 @@ async def test_openrouter_api_key(
             elif response.status_code == 401:
                 return {"valid": False, "error": "Invalid API key"}
             else:
-                return {"valid": False, "error": f"API returned status {response.status_code}"}
+                return {
+                    "valid": False,
+                    "error": f"API returned status {response.status_code}",
+                }
     except httpx.TimeoutException:
         return {"valid": False, "error": "Connection timed out"}
     except Exception as e:

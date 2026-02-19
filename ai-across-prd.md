@@ -5,12 +5,17 @@
 
 **Version:** 1.0  
 **Status:** Draft  
-**Last Updated:** January 20, 2026  
+**Last Updated:** February 19, 2026  
 **Document Owner:** MarketAcross Product Team
 
 ---
 
 ## 1. Executive Summary
+
+> Implementation alignment note (February 18, 2026):
+> - Assistant cards open chat directly with assistant context.
+> - Assistant model defines initial model in assistant chat; global default model defines initial model in general chat.
+> - Users can override model from chat dropdown before sending.
 
 ### 1.1 Product Vision
 AI-Across is a production-ready, self-hosted AI content platform designed for MarketAcross's content agency operations. It enables content teams to create, manage, and deploy specialized AI assistants with custom instructions and knowledge bases, while maintaining the flexibility to switch between any LLM provider through OpenRouter integration.

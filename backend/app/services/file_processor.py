@@ -1,6 +1,8 @@
 """File processor service for handling file uploads and indexing."""
 
+import logging
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -11,14 +13,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.logging import assistant_id_var, get_logger
 from app.models.knowledge_file import KnowledgeFile
 from app.services.chroma_service import ChromaService, get_chroma_service
 from app.services.embedding_service import EmbeddingService, get_embedding_service
-from app.utils.chunker import TextChunker, chunk_text
+from app.utils.chunker import chunk_text
 from app.utils.file_extractors import extract_text, get_file_type, ALLOWED_EXTENSIONS
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 settings = get_settings()
 
 ALLOWED_MIME_TYPES = {
@@ -133,6 +134,7 @@ class FileProcessorService:
     async def create_file_record(
         self,
         assistant_id: uuid.UUID,
+        workspace_id: Optional[uuid.UUID],
         filename: str,
         file_type: str,
         file_path: Path,
@@ -152,11 +154,15 @@ class FileProcessorService:
         """
         knowledge_file = KnowledgeFile(
             assistant_id=assistant_id,
+            workspace_id=workspace_id,
             filename=filename,
             file_type=file_type,
             file_path=str(file_path),
             size_bytes=size_bytes,
             status="processing",
+            processing_started_at=datetime.now(timezone.utc),
+            attempt_count=0,
+            max_attempts=3,
         )
 
         self.db.add(knowledge_file)
@@ -193,6 +199,34 @@ class FileProcessorService:
                 file.error_message = error_message
             await self.db.flush()
 
+    async def _register_attempt(self, file: KnowledgeFile) -> None:
+        """Mark a processing attempt start."""
+        file.attempt_count += 1
+        file.processing_started_at = datetime.now(timezone.utc)
+        file.next_retry_at = None
+        file.last_error = None
+        file.status = "processing"
+        await self.db.flush()
+
+    async def _mark_retry_or_failed(self, file: KnowledgeFile, error: str) -> None:
+        """Move file to pending retry or terminal failed state."""
+        backoff_minutes = [5, 15, 45]
+        if file.attempt_count >= file.max_attempts:
+            file.status = "failed"
+            file.error_message = error
+            file.last_error = error
+            await self.db.flush()
+            return
+
+        delay_idx = min(file.attempt_count - 1, len(backoff_minutes) - 1)
+        file.status = "pending"
+        file.error_message = error
+        file.last_error = error
+        file.next_retry_at = datetime.now(timezone.utc) + timedelta(
+            minutes=backoff_minutes[delay_idx]
+        )
+        await self.db.flush()
+
     async def process_file(self, file_id: uuid.UUID) -> bool:
         """Process a file: extract text, chunk, embed, and store.
 
@@ -211,24 +245,9 @@ class FileProcessorService:
         if not file:
             return False
 
-        # Track processing start time for reaper detection
-        from datetime import datetime, timezone as tz
-
-        file.processing_started_at = datetime.now(tz.utc)
-        await self.db.flush()
-
-        assistant_id_var.set(str(file.assistant_id))
-        logger.info(
-            "Processing file",
-            extra={
-                "file_id": str(file_id),
-                "filename": file.filename,
-                "file_type": file.file_type,
-                "attempt": file.attempt_count + 1,
-            },
-        )
-
         try:
+            await self._register_attempt(file)
+
             # Update status to indexing
             await self.update_file_status(file_id, "indexing")
 
@@ -237,18 +256,14 @@ class FileProcessorService:
             text = extract_text(file_path, file.file_type)
 
             if not text.strip():
-                await self.update_file_status(
-                    file_id, "error", error_message="No text content found in file"
-                )
+                await self._mark_retry_or_failed(file, "No text content found in file")
                 return False
 
             # Chunk the text
             chunks = chunk_text(text)
 
             if not chunks:
-                await self.update_file_status(
-                    file_id, "error", error_message="Failed to create text chunks"
-                )
+                await self._mark_retry_or_failed(file, "Failed to create text chunks")
                 return False
 
             # Generate embeddings
@@ -275,30 +290,33 @@ class FileProcessorService:
 
             # Update status to ready
             await self.update_file_status(file_id, "ready", chunk_count=len(chunks))
+            file.next_retry_at = None
+            file.last_error = None
+            await self.db.flush()
+
             logger.info(
-                "File processing complete",
-                extra={"file_id": str(file_id), "chunk_count": len(chunks)},
+                "file_processing_succeeded",
+                extra={
+                    "file_id": str(file_id),
+                    "assistant_id": str(file.assistant_id),
+                    "attempt_count": file.attempt_count,
+                    "chunk_count": len(chunks),
+                },
             )
 
             return True
 
         except Exception as e:
-            logger.error(
-                "File processing failed",
-                extra={"file_id": str(file_id), "error": str(e)[:200]},
-            )
-            # Store error for reaper visibility
-            file.last_error = str(e)[:500]
-            # Clean up physical file on failure
-            if file and file.file_path:
-                cleanup_path = Path(file.file_path)
-                if cleanup_path.exists():
-                    try:
-                        cleanup_path.unlink()
-                    except OSError:
-                        logger.warning(f"Failed to clean up file: {cleanup_path}")
-            await self.update_file_status(
-                file_id, "error", error_message=str(e)[:500]
+            error_text = str(e)[:500]
+            await self._mark_retry_or_failed(file, error_text)
+            logger.exception(
+                "file_processing_failed",
+                extra={
+                    "file_id": str(file_id),
+                    "assistant_id": str(file.assistant_id),
+                    "attempt_count": file.attempt_count,
+                    "max_attempts": file.max_attempts,
+                },
             )
             return False
 
@@ -306,6 +324,7 @@ class FileProcessorService:
         self,
         file: UploadFile,
         assistant_id: uuid.UUID,
+        workspace_id: Optional[uuid.UUID] = None,
     ) -> KnowledgeFile:
         """Upload a file and queue it for processing.
 
@@ -330,6 +349,7 @@ class FileProcessorService:
         # Create database record
         knowledge_file = await self.create_file_record(
             assistant_id=assistant_id,
+            workspace_id=workspace_id,
             filename=file.filename or "unknown",
             file_type=file_type,
             file_path=file_path,
@@ -428,11 +448,10 @@ class FileProcessorService:
             file_id=file_id,
         )
 
-        # Reset status and retry tracking for manual reprocess
-        file.attempt_count = 0
-        file.next_retry_at = None
-        file.last_error = None
-        file.processing_started_at = None
-        await self.update_file_status(file_id, "processing")
+        # Reset status
+        file.status = "pending"
+        file.next_retry_at = datetime.now(timezone.utc)
+        file.last_error = "Manual reprocess requested"
+        await self.db.flush()
 
         return True

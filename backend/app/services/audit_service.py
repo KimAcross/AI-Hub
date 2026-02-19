@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
-from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -318,9 +317,7 @@ class AuditService:
             List of recent AuditLog entries.
         """
         result = await self.db.execute(
-            select(AuditLog)
-            .order_by(AuditLog.created_at.desc())
-            .limit(limit)
+            select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit)
         )
         return list(result.scalars().all())
 
@@ -401,7 +398,4 @@ class AuditService:
         )
         rows = result.all()
 
-        return [
-            {"action": row.action, "count": row.count}
-            for row in rows
-        ]
+        return [{"action": row.action, "count": row.count} for row in rows]

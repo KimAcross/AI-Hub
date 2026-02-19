@@ -1,4 +1,5 @@
-import { ReactNode, useEffect } from 'react'
+import { useEffect } from 'react'
+import type { ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAdminStore } from '@/stores/admin-store'
 import { useAdminVerify } from '@/hooks/use-admin'

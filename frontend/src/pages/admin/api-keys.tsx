@@ -2,13 +2,7 @@ import { useState } from 'react'
 import { AdminLayout } from '@/components/admin/admin-layout'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select } from '@/components/ui/select'
 import { ApiKeyTable } from '@/components/admin/api-keys/api-key-table'
 import { ApiKeyDialog } from '@/components/admin/api-keys/api-key-dialog'
 import { RotateKeyDialog } from '@/components/admin/api-keys/rotate-key-dialog'
@@ -138,18 +132,10 @@ function ApiKeysPageContent() {
             <Select
               value={providerFilter}
               onValueChange={(v) => setProviderFilter(v as APIKeyProvider | 'all')}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Filter by provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {providers.map((p) => (
-                  <SelectItem key={p.value} value={p.value}>
-                    {p.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={providers}
+              placeholder="Filter by provider"
+              className="w-[180px]"
+            />
           </div>
         </CardHeader>
         <CardContent>
@@ -168,6 +154,7 @@ function ApiKeysPageContent() {
 
       {/* Dialogs */}
       <ApiKeyDialog
+        key={`${dialogMode}-${selectedKey?.id ?? 'new'}-${dialogOpen ? 'open' : 'closed'}`}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         apiKey={selectedKey}

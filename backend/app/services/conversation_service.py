@@ -10,12 +10,11 @@ from sqlalchemy.orm import selectinload
 from app.core.exceptions import (
     AssistantNotFoundError,
     ConversationNotFoundError,
-    QuotaExceededError,
 )
-from app.core.logging import assistant_id_var, conversation_id_var, get_logger
 from app.models.assistant import Assistant
 from app.models.conversation import Conversation
 from app.models.message import Message
+from app.core.logging import get_logger, set_request_context
 from app.schemas.conversation import (
     ConversationCreate,
     ConversationExport,
@@ -58,25 +57,25 @@ class ConversationService:
         Raises:
             AssistantNotFoundError: If assistant doesn't exist.
         """
-        # Verify assistant exists (if provided)
-        if data.assistant_id:
-            result = await self.db.execute(
-                select(Assistant)
-                .where(Assistant.id == data.assistant_id)
-                .where(Assistant.is_deleted == False)  # noqa: E712
-            )
-            assistant = result.scalar_one_or_none()
-            if not assistant:
-                raise AssistantNotFoundError(str(data.assistant_id))
+        # Verify assistant exists
+        result = await self.db.execute(
+            select(Assistant)
+            .where(Assistant.id == data.assistant_id)
+            .where(Assistant.is_deleted == False)  # noqa: E712
+        )
+        assistant = result.scalar_one_or_none()
+        if not assistant:
+            raise AssistantNotFoundError(str(data.assistant_id))
 
         conversation = Conversation(
             assistant_id=data.assistant_id,
             title=data.title,
             user_id=user_id,
+            workspace_id=assistant.workspace_id,
         )
         self.db.add(conversation)
         await self.db.flush()
-        await self.db.refresh(conversation, ["messages"])
+        await self.db.refresh(conversation)
         return conversation
 
     async def get_conversation(
@@ -183,7 +182,7 @@ class ConversationService:
             setattr(conversation, field, value)
 
         await self.db.flush()
-        await self.db.refresh(conversation, ["messages"])
+        await self.db.refresh(conversation)
         return conversation
 
     async def delete_conversation(self, conversation_id: uuid.UUID) -> None:
@@ -245,14 +244,47 @@ class ConversationService:
         Raises:
             ConversationNotFoundError: If message doesn't exist.
         """
-        result = await self.db.execute(
-            select(Message).where(Message.id == message_id)
-        )
+        result = await self.db.execute(select(Message).where(Message.id == message_id))
         message = result.scalar_one_or_none()
         if not message:
             raise ConversationNotFoundError(f"Message not found: {message_id}")
 
         message.content = content
+        await self.db.flush()
+        await self.db.refresh(message)
+        return message
+
+    async def add_message_feedback(
+        self,
+        conversation_id: uuid.UUID,
+        message_id: uuid.UUID,
+        feedback: str,
+        feedback_reason: Optional[str] = None,
+    ) -> Message:
+        """Attach thumbs up/down feedback to an assistant message."""
+        message = await self.get_message(message_id)
+
+        if message.conversation_id != conversation_id:
+            raise ConversationNotFoundError(
+                f"Message not found in conversation: {message_id}"
+            )
+        if message.role != "assistant":
+            raise ConversationNotFoundError(
+                "Feedback is only supported for assistant messages"
+            )
+
+        retrieval_doc_ids: list[str] = []
+        if message.tokens_used and isinstance(message.tokens_used, dict):
+            raw_ids = message.tokens_used.get("retrieval_doc_ids")
+            if isinstance(raw_ids, list):
+                retrieval_doc_ids = [str(x) for x in raw_ids]
+
+        message.feedback = feedback
+        message.feedback_reason = feedback_reason
+        message.feedback_context = {
+            "model": message.model,
+            "retrieval_doc_ids": retrieval_doc_ids,
+        }
         await self.db.flush()
         await self.db.refresh(message)
         return message
@@ -266,51 +298,10 @@ class ConversationService:
         Returns:
             Message object.
         """
-        result = await self.db.execute(
-            select(Message).where(Message.id == message_id)
-        )
+        result = await self.db.execute(select(Message).where(Message.id == message_id))
         message = result.scalar_one_or_none()
         if not message:
             raise ConversationNotFoundError(f"Message not found: {message_id}")
-        return message
-
-    async def submit_feedback(
-        self,
-        message_id: uuid.UUID,
-        feedback: str,
-        reason: Optional[str] = None,
-    ) -> Message:
-        """Submit feedback on an assistant message.
-
-        Args:
-            message_id: UUID of the message.
-            feedback: "positive" or "negative".
-            reason: Optional reason text.
-
-        Returns:
-            Updated message.
-        """
-        message = await self.get_message(message_id)
-
-        if message.role != "assistant":
-            raise ConversationNotFoundError("Feedback can only be submitted on assistant messages")
-
-        message.feedback = feedback
-        message.feedback_reason = reason
-        message.feedback_context = {
-            "model": message.model,
-        }
-
-        await self.db.flush()
-        await self.db.refresh(message)
-        logger.info(
-            "Feedback submitted",
-            extra={
-                "message_id": str(message_id),
-                "feedback": feedback,
-                "model": message.model,
-            },
-        )
         return message
 
     async def send_message(
@@ -331,20 +322,21 @@ class ConversationService:
         """
         # Get conversation with assistant
         conversation = await self.get_conversation(conversation_id)
+        set_request_context(
+            conversation_id=str(conversation_id),
+            assistant_id=str(conversation.assistant_id)
+            if conversation.assistant_id
+            else None,
+        )
+
+        if not conversation.assistant:
+            yield {
+                "type": "error",
+                "error": "Assistant not found for this conversation",
+            }
+            return
 
         assistant = conversation.assistant
-
-        # Set context variables for log correlation
-        conversation_id_var.set(str(conversation_id))
-        if assistant:
-            assistant_id_var.set(str(assistant.id))
-        logger.info(
-            "Sending message",
-            extra={
-                "model": assistant.model if assistant else model_override,
-                "assistant_name": assistant.name if assistant else "Direct Chat",
-            },
-        )
 
         # Check quota before proceeding
         try:
@@ -354,7 +346,6 @@ class ConversationService:
             quota_result = await quota_service.check_quota()
 
             if not quota_result.allowed:
-                logger.warning("Quota exceeded", extra={"reason": quota_result.reason})
                 yield {
                     "type": "error",
                     "error": f"Usage limit exceeded: {quota_result.reason}",
@@ -362,7 +353,10 @@ class ConversationService:
                 }
                 return
         except Exception as e:
-            logger.warning(f"Quota check failed: {e}")
+            # Log but don't block if quota check fails
+            import logging
+
+            logging.getLogger(__name__).warning(f"Quota check failed: {e}")
 
         # Save user message
         user_message = await self.add_message(
@@ -379,42 +373,38 @@ class ConversationService:
         # Build message history for the API
         messages_for_api: list[dict[str, str]] = []
 
-        if assistant:
-            # Get RAG-augmented system prompt with per-assistant guardrails
-            try:
-                system_prompt, retrieved_chunks = await self.rag.get_augmented_prompt(
-                    assistant_id=assistant.id,
-                    assistant_name=assistant.name,
-                    assistant_instructions=assistant.instructions,
-                    user_query=content,
-                    top_k=getattr(assistant, "max_retrieval_chunks", None),
-                    max_context_tokens=getattr(assistant, "max_context_tokens", None),
-                )
-            except Exception:
-                # Fallback to simple prompt if RAG fails
-                system_prompt = f"You are {assistant.name}.\n\n{assistant.instructions}"
-        else:
-            # No assistant — use a generic system prompt
-            system_prompt = "You are a helpful AI assistant."
+        # Get RAG-augmented system prompt
+        try:
+            system_prompt, retrieved_chunks = await self.rag.get_augmented_prompt(
+                assistant_id=assistant.id,
+                assistant_name=assistant.name,
+                assistant_instructions=assistant.instructions,
+                user_query=content,
+                top_k=assistant.max_retrieval_chunks,
+                max_context_tokens=assistant.max_context_tokens,
+            )
+        except Exception:
+            # Fallback to simple prompt if RAG fails
+            system_prompt = f"You are {assistant.name}.\n\n{assistant.instructions}"
+            retrieved_chunks = []
 
         messages_for_api.append({"role": "system", "content": system_prompt})
 
         # Add conversation history (exclude the message we just added)
         for msg in conversation.messages:
             if msg.id != user_message.id:
-                messages_for_api.append({
-                    "role": msg.role,
-                    "content": msg.content,
-                })
+                messages_for_api.append(
+                    {
+                        "role": msg.role,
+                        "content": msg.content,
+                    }
+                )
 
         # Add the current user message
         messages_for_api.append({"role": "user", "content": content})
 
         # Determine which model to use
-        default_model = "anthropic/claude-3.5-sonnet"
-        model = model_override or (assistant.model if assistant else default_model)
-        temperature = float(assistant.temperature) if assistant else 0.7
-        max_tokens = assistant.max_tokens if assistant else 4096
+        model = model_override or assistant.model
 
         # Create placeholder for assistant message
         assistant_message = await self.add_message(
@@ -432,13 +422,14 @@ class ConversationService:
         # Stream the response
         full_content = ""
         tokens_used = None
+        retrieval_doc_ids = [f"{c.file_id}:{c.chunk_index}" for c in retrieved_chunks]
 
         try:
             async for chunk in self.openrouter.stream_chat_completion(
                 messages=messages_for_api,
                 model=model,
-                temperature=temperature,
-                max_tokens=max_tokens,
+                temperature=float(assistant.temperature),
+                max_tokens=assistant.max_tokens,
             ):
                 if chunk["type"] == "content":
                     full_content += chunk["content"]
@@ -448,9 +439,12 @@ class ConversationService:
                     }
                 elif chunk["type"] == "done":
                     tokens_used = chunk.get("tokens_used")
+                    if tokens_used is None:
+                        tokens_used = {}
+                    tokens_used["retrieval_doc_ids"] = retrieval_doc_ids
 
                     # Log usage if we have token data
-                    if tokens_used and assistant:
+                    if tokens_used:
                         from app.services.usage_log_service import UsageLogService
 
                         usage_service = UsageLogService(self.db, self.openrouter)
@@ -468,6 +462,18 @@ class ConversationService:
                         "message_id": str(assistant_message.id),
                         "tokens_used": tokens_used,
                     }
+                    logger.info(
+                        "chat_completion_done",
+                        extra={
+                            "conversation_id": str(conversation_id),
+                            "assistant_id": str(assistant.id),
+                            "model": model,
+                            "prompt_tokens": tokens_used.get("prompt_tokens", 0),
+                            "completion_tokens": tokens_used.get(
+                                "completion_tokens", 0
+                            ),
+                        },
+                    )
                 elif chunk["type"] == "error":
                     yield chunk
 
@@ -512,7 +518,15 @@ class ConversationService:
             assistant_name = conversation.assistant.name
 
         messages = [
-            message_to_response(msg)
+            MessageResponse(
+                id=msg.id,
+                conversation_id=msg.conversation_id,
+                role=msg.role,
+                content=msg.content,
+                model=msg.model,
+                tokens_used=msg.tokens_used,
+                created_at=msg.created_at,
+            )
             for msg in conversation.messages
         ]
 
@@ -528,7 +542,10 @@ class ConversationService:
 
 def conversation_to_response(conversation: Conversation) -> ConversationResponse:
     """Convert a Conversation model to response schema."""
-    message_count = len(conversation.messages) if conversation.messages else 0
+    # Avoid lazy-loading relationships during serialization, which can trigger
+    # MissingGreenlet in async contexts (e.g., right after create).
+    loaded_messages = conversation.__dict__.get("messages")
+    message_count = len(loaded_messages) if loaded_messages else 0
     return ConversationResponse(
         id=conversation.id,
         assistant_id=conversation.assistant_id,
@@ -548,7 +565,8 @@ def message_to_response(message: Message) -> MessageResponse:
         content=message.content,
         model=message.model,
         tokens_used=message.tokens_used,
-        created_at=message.created_at,
         feedback=message.feedback,
         feedback_reason=message.feedback_reason,
+        feedback_context=message.feedback_context,
+        created_at=message.created_at,
     )

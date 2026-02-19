@@ -206,7 +206,7 @@ function QuotaSettingsDialog({
 function UsagePageContent() {
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const { data: quota, isLoading: isLoadingQuota } = useGlobalQuota()
+  const { data: quota } = useGlobalQuota()
   const { data: usageStatus, isLoading: isLoadingStatus } = useUsageStatus()
   const { data: dailyUsage, isLoading: isLoadingDaily } = useDailyUsage(30)
   const { data: summary, isLoading: isLoadingSummary } = useUsageSummary()

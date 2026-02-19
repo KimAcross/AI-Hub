@@ -28,9 +28,7 @@ class TTLCache:
                 del self._cache[key]
             return None
 
-    async def set(
-        self, key: str, value: Any, ttl_seconds: int | None = None
-    ) -> None:
+    async def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         """Set a value in cache with optional custom TTL."""
         ttl = (
             timedelta(seconds=ttl_seconds)
@@ -85,7 +83,7 @@ def cached(
     """
 
     def decorator(
-        func: Callable[P, Coroutine[Any, Any, T]]
+        func: Callable[P, Coroutine[Any, Any, T]],
     ) -> Callable[P, Coroutine[Any, Any, T]]:
         @wraps(func)
         async def wrapper(*args: P.args, **kwargs: P.kwargs) -> T:

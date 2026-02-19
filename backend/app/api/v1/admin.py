@@ -32,7 +32,9 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 @router.post("/login", response_model=AdminLoginResponse)
 @limiter.limit("5/minute")
-async def admin_login(request: Request, login_request: AdminLoginRequest) -> AdminLoginResponse:
+async def admin_login(
+    request: Request, login_request: AdminLoginRequest
+) -> AdminLoginResponse:
     """Login to admin dashboard.
 
     Args:
@@ -160,7 +162,9 @@ async def get_system_health(
     chromadb_health = _check_chromadb()
 
     # Check API key status
-    api_key = await settings_service.get_openrouter_api_key() or settings.openrouter_api_key
+    api_key = (
+        await settings_service.get_openrouter_api_key() or settings.openrouter_api_key
+    )
     api_key_configured = bool(api_key)
     api_key_masked = _mask_api_key(api_key) if api_key else None
 
@@ -195,7 +199,9 @@ async def _check_openrouter() -> ComponentHealth:
         if is_connected:
             return ComponentHealth(status="healthy", latency_ms=latency_ms)
         elif error and "Invalid API key" in error:
-            return ComponentHealth(status="degraded", latency_ms=latency_ms, error=error)
+            return ComponentHealth(
+                status="degraded", latency_ms=latency_ms, error=error
+            )
         else:
             return ComponentHealth(status="unhealthy", error=error)
 

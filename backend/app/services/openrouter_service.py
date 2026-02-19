@@ -91,7 +91,9 @@ class OpenRouterService:
                         "context_length": model.get("context_length", 4096),
                         "pricing": {
                             "prompt": model.get("pricing", {}).get("prompt", "0"),
-                            "completion": model.get("pricing", {}).get("completion", "0"),
+                            "completion": model.get("pricing", {}).get(
+                                "completion", "0"
+                            ),
                         },
                     }
                     result.append(model_info)
@@ -133,7 +135,10 @@ class OpenRouterService:
 
         # Check if cache is valid
         current_time = time.time()
-        if not _pricing_cache or (current_time - _pricing_cache_time) > _PRICING_CACHE_TTL:
+        if (
+            not _pricing_cache
+            or (current_time - _pricing_cache_time) > _PRICING_CACHE_TTL
+        ):
             # Refresh cache
             try:
                 models = await self.list_models()
@@ -219,9 +224,9 @@ class OpenRouterService:
             "stream": False,
         }
 
-        start_time = time.time()
         async with httpx.AsyncClient(timeout=120.0) as client:
             try:
+                start_time = time.perf_counter()
                 response = await client.post(
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
@@ -230,40 +235,34 @@ class OpenRouterService:
                 response.raise_for_status()
 
                 data = response.json()
-                latency_ms = int((time.time() - start_time) * 1000)
-                tokens = data.get("usage", {})
-                logger.info(
-                    "Chat completion finished",
-                    extra={
-                        "model": model,
-                        "latency_ms": latency_ms,
-                        "prompt_tokens": tokens.get("prompt_tokens", 0),
-                        "completion_tokens": tokens.get("completion_tokens", 0),
-                        "total_tokens": tokens.get("total_tokens", 0),
-                    },
-                )
-                return {
+                result = {
                     "content": data["choices"][0]["message"]["content"],
                     "model": data.get("model", model),
                     "tokens_used": {
-                        "prompt_tokens": tokens.get("prompt_tokens", 0),
-                        "completion_tokens": tokens.get("completion_tokens", 0),
-                        "total_tokens": tokens.get("total_tokens", 0),
+                        "prompt_tokens": data.get("usage", {}).get("prompt_tokens", 0),
+                        "completion_tokens": data.get("usage", {}).get(
+                            "completion_tokens", 0
+                        ),
+                        "total_tokens": data.get("usage", {}).get("total_tokens", 0),
                     },
                 }
+                logger.info(
+                    "openrouter_chat_completion",
+                    extra={
+                        "model": result["model"],
+                        "provider": "openrouter",
+                        "latency_ms": int((time.perf_counter() - start_time) * 1000),
+                        "tokens": result["tokens_used"].get("total_tokens", 0),
+                    },
+                )
+                return result
 
             except httpx.HTTPStatusError as e:
-                latency_ms = int((time.time() - start_time) * 1000)
-                logger.error(
-                    "Chat completion HTTP error",
-                    extra={"model": model, "latency_ms": latency_ms, "status_code": e.response.status_code},
-                )
                 raise OpenRouterError(
                     f"Chat completion failed: {e.response.text}",
                     status_code=e.response.status_code,
                 )
             except Exception as e:
-                logger.error("Chat completion error", extra={"model": model, "error": str(e)})
                 raise OpenRouterError(f"Chat completion failed: {str(e)}")
 
     async def stream_chat_completion(
@@ -300,9 +299,9 @@ class OpenRouterService:
             "stream": True,
         }
 
-        start_time = time.time()
         async with httpx.AsyncClient(timeout=300.0) as client:
             try:
+                started_at = time.perf_counter()
                 async with client.stream(
                     "POST",
                     f"{self.base_url}/chat/completions",
@@ -311,10 +310,6 @@ class OpenRouterService:
                 ) as response:
                     if response.status_code != 200:
                         error_body = await response.aread()
-                        logger.error(
-                            "Streaming completion HTTP error",
-                            extra={"model": model, "status_code": response.status_code},
-                        )
                         raise OpenRouterError(
                             f"Chat completion failed: {error_body.decode()}",
                             status_code=response.status_code,
@@ -332,17 +327,6 @@ class OpenRouterService:
                             data_str = line[6:]
 
                             if data_str.strip() == "[DONE]":
-                                latency_ms = int((time.time() - start_time) * 1000)
-                                logger.info(
-                                    "Streaming completion finished",
-                                    extra={
-                                        "model": model,
-                                        "latency_ms": latency_ms,
-                                        "prompt_tokens": prompt_tokens,
-                                        "completion_tokens": completion_tokens,
-                                        "total_tokens": prompt_tokens + completion_tokens,
-                                    },
-                                )
                                 # Stream complete
                                 yield {
                                     "type": "done",
@@ -350,9 +334,21 @@ class OpenRouterService:
                                     "tokens_used": {
                                         "prompt_tokens": prompt_tokens,
                                         "completion_tokens": completion_tokens,
-                                        "total_tokens": prompt_tokens + completion_tokens,
+                                        "total_tokens": prompt_tokens
+                                        + completion_tokens,
                                     },
                                 }
+                                logger.info(
+                                    "openrouter_stream_completion",
+                                    extra={
+                                        "model": model,
+                                        "provider": "openrouter",
+                                        "latency_ms": int(
+                                            (time.perf_counter() - started_at) * 1000
+                                        ),
+                                        "tokens": prompt_tokens + completion_tokens,
+                                    },
+                                )
                                 break
 
                             try:
@@ -374,7 +370,9 @@ class OpenRouterService:
                                 # Extract usage if present (some providers include it)
                                 usage = data.get("usage", {})
                                 if usage:
-                                    prompt_tokens = usage.get("prompt_tokens", prompt_tokens)
+                                    prompt_tokens = usage.get(
+                                        "prompt_tokens", prompt_tokens
+                                    )
                                     completion_tokens = usage.get(
                                         "completion_tokens", completion_tokens
                                     )

@@ -4,7 +4,7 @@ import base64
 import hashlib
 from typing import Optional
 
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import Fernet
 
 # Prefix to identify encrypted values
 ENCRYPTED_PREFIX = "enc:"
@@ -49,7 +49,7 @@ def decrypt_value(ciphertext: str, secret_key: str) -> str:
         InvalidToken: If decryption fails (wrong key or corrupted data)
     """
     if ciphertext.startswith(ENCRYPTED_PREFIX):
-        ciphertext = ciphertext[len(ENCRYPTED_PREFIX):]
+        ciphertext = ciphertext[len(ENCRYPTED_PREFIX) :]
 
     key = derive_key(secret_key)
     fernet = Fernet(key)

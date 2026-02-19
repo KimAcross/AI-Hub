@@ -5,6 +5,7 @@ Revises: 001
 Create Date: 2026-01-25 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -32,7 +33,9 @@ def upgrade() -> None:
         ),
         sa.Column("model", sa.String(length=100), nullable=False),
         sa.Column("prompt_tokens", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("completion_tokens", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "completion_tokens", sa.Integer(), nullable=False, server_default="0"
+        ),
         sa.Column("total_tokens", sa.Integer(), nullable=False, server_default="0"),
         sa.Column(
             "cost_usd",

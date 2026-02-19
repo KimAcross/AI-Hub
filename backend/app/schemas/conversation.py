@@ -1,7 +1,7 @@
 """Pydantic schemas for Conversation and Message API."""
 
 from datetime import datetime
-from typing import Any, Literal, Optional
+from typing import Any, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -33,18 +33,12 @@ class MessageResponse(MessageBase):
     role: str
     model: Optional[str] = None
     tokens_used: Optional[dict[str, Any]] = None
-    created_at: datetime
     feedback: Optional[str] = None
     feedback_reason: Optional[str] = None
+    feedback_context: Optional[dict[str, Any]] = None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class FeedbackCreate(BaseModel):
-    """Schema for submitting message feedback."""
-
-    feedback: Literal["positive", "negative"]
-    reason: Optional[str] = Field(default=None, max_length=1000)
 
 
 class ConversationBase(BaseModel):
@@ -56,7 +50,7 @@ class ConversationBase(BaseModel):
 class ConversationCreate(ConversationBase):
     """Schema for creating a new conversation."""
 
-    assistant_id: Optional[UUID] = None
+    assistant_id: UUID
 
 
 class ConversationUpdate(BaseModel):
@@ -115,6 +109,13 @@ class ChatRequest(MessageCreate):
     """Schema for chat request with additional options."""
 
     model: Optional[str] = Field(default=None, max_length=100)
+
+
+class MessageFeedbackRequest(BaseModel):
+    """Schema for message feedback."""
+
+    feedback: str = Field(..., pattern="^(positive|negative)$")
+    feedback_reason: Optional[str] = Field(default=None, max_length=500)
 
 
 class ModelInfo(BaseModel):

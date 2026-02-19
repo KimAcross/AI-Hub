@@ -1,8 +1,8 @@
 # AI-Across High-Level Design (HLD)
 
-**Document Version:** 1.4
-**Last Updated:** February 11, 2026
-**Status:** Active (v1.0.0)
+**Document Version:** 1.5
+**Last Updated:** February 19, 2026
+**Status:** Active
 
 ---
 
@@ -108,6 +108,14 @@ This document covers:
 | OpenRouter | LLM API gateway | HTTPS REST |
 | PostgreSQL | Relational data storage | TCP/SQL |
 | ChromaDB | Vector storage | Local Python API |
+
+### 2.4 Current Runtime Behavior (Implementation Alignment)
+
+- Assistant card click opens chat with assistant context (`/chat?assistant=<id>`).
+- New general chat starts from `settings.default_model`.
+- Assistant chat starts from assistant-level configured model.
+- Chat model dropdown remains user-overridable per conversation/message flow.
+- OpenRouter API key is resolved from database settings first, then environment fallback.
 
 ---
 
@@ -423,17 +431,7 @@ class ConversationService:
     async def delete_conversation(conversation_id: UUID) -> None
     async def add_message(conversation_id: UUID, role: str, content: str) -> Message
     async def send_message(conversation_id: UUID, content: str) -> AsyncIterator[dict]
-    async def submit_feedback(message_id: UUID, feedback: str, reason: str | None) -> Message
     async def export_conversation(conversation_id: UUID) -> ConversationExport
-```
-
-#### IngestionReaper
-
-```python
-class IngestionReaper:
-    async def run() -> None                    # Main loop (every 5 min)
-    async def _reap_stuck_files() -> None      # Detect files stuck in processing >15 min
-    async def _retry_pending_files() -> None   # Re-trigger files where next_retry_at <= now
 ```
 
 #### OpenRouterService
@@ -585,11 +583,8 @@ class AuditService:
                         │ model: string   │
                         │ temperature     │
                         │ max_tokens      │
-                        │ max_retrieval_chunks │
-                        │ max_context_tokens   │
                         │ avatar_url      │
                         │ is_deleted      │
-                        │ workspace_id(FK)│
                         │ created_at      │
                         │ updated_at      │
                         └────────┬────────┘
@@ -603,37 +598,24 @@ class AuditService:
         │ id: UUID        │         │ id: UUID        │
         │ assistant_id    │         │ assistant_id    │
         │ filename        │         │ user_id (FK)    │
-        │ file_type       │         │ workspace_id(FK)│
-        │ file_path       │         │ title           │
-        │ size_bytes      │         │ created_at      │
-        │ chunk_count     │         │ updated_at      │
-        │ status          │         └────────┬────────┘
-        │ error_message   │                  │
-        │ processing_started_at │            │
-        │ attempt_count   │                  ▼
-        │ max_attempts    │         ┌─────────────────┐
-        │ next_retry_at   │         │    Message      │
-        │ last_error      │         ├─────────────────┤
-        │ workspace_id(FK)│         │ id: UUID        │
-        │ created_at      │         │ conversation_id │
-        └─────────────────┘         │ role            │
+        │ file_type       │         │ title           │
+        │ file_path       │         │ created_at      │
+        │ size_bytes      │         │ updated_at      │
+        │ chunk_count     │         └────────┬────────┘
+        │ chunk_count     │                  │
+        │ status          │                  │
+        │ error_message   │                  ▼
+        │ created_at      │         ┌─────────────────┐
+        └─────────────────┘         │    Message      │
+                                    ├─────────────────┤
+                                    │ id: UUID        │
+                                    │ conversation_id │
+                                    │ role            │
                                     │ content         │
                                     │ model           │
                                     │ tokens_used     │
-                                    │ feedback        │
-                                    │ feedback_reason │
-                                    │ feedback_context│
                                     │ created_at      │
                                     └─────────────────┘
-
-        ┌─────────────────┐
-        │   Workspace     │
-        ├─────────────────┤
-        │ id: UUID        │
-        │ name            │
-        │ slug (unique)   │
-        │ created_at      │
-        └─────────────────┘
 
         ┌─────────────────┐
         │    Settings     │
@@ -822,7 +804,7 @@ User                        Frontend                      Backend
  │ <───────────────────────────│                             │
  │                             │                             │
  │                             │  6. GET /api/v1/assistants  │
- │                             │  Authorization: Bearer jwt   │
+ │                             │  X-Admin-Token: <jwt>        │
  │                             │ ───────────────────────────>│
  │                             │                             │
  │                             │                             │ 7. Validate JWT
@@ -836,12 +818,12 @@ User                        Frontend                      Backend
 | Control | Implementation |
 |---------|----------------|
 | Admin Password | Environment variable (`ADMIN_PASSWORD`) for legacy support |
-| User Authentication | JWT access tokens (15 min) + refresh tokens (7 days) |
+| User Authentication | JWT access tokens (8 hours) + refresh tokens (7 days) |
 | Password Storage | bcrypt with cost factor 12 |
 | API Key Storage | Fernet symmetric encryption at rest |
 | Role-Based Access | Admin > Manager > User hierarchy |
 | Session Management | JWT with role claims, automatic refresh |
-| API Authentication | Bearer token in Authorization header |
+| API Authentication | `X-Admin-Token` header carrying JWT |
 | CORS | Whitelist of allowed origins |
 | Input Validation | Pydantic models for all inputs |
 | SQL Injection | SQLAlchemy parameterized queries |
@@ -986,12 +968,6 @@ User                        Frontend                      Backend
 | 2026-02-04 | RBAC with 3 roles | Simple hierarchy covers most use cases |
 | 2026-02-04 | JSONB for audit old/new values | Flexible schema, efficient storage |
 | 2026-02-04 | Quota check before AI calls | Prevent overspending, graceful degradation |
-| 2026-02-11 | python-json-logger + contextvars | Structured JSON logs with zero-dependency request correlation |
-| 2026-02-11 | asyncio reaper over Celery | Self-healing ingestion without extra container |
-| 2026-02-11 | workspace_id now, enforcement later | Future-proof schema for v1.1 client isolation |
-| 2026-02-11 | Per-assistant RAG limits | Configurable guardrails prevent runaway retrieval costs |
-| 2026-02-11 | Message feedback with model context | Quality signal capture for understanding AI output effectiveness |
-| 2026-02-11 | GitHub Actions CI pipeline | Automated quality gate on PRs: ruff + pytest (backend), ESLint + Vitest + build (frontend) |
 
 ## Appendix C: References
 
@@ -1020,13 +996,13 @@ User                        Frontend                      Backend
 | Admin Ready (Phase 7) | ✅ Complete | Admin dashboard, usage tracking, cost calculation |
 | Admin Enhanced (Phase 9) | ✅ Complete | Multi-user, API keys, quotas, audit logs |
 | Security (Phase 10) | ✅ Complete | User auth, RBAC, conversation isolation, security headers |
-| v1.0 (Phase 8) | ✅ Complete | CI, structured logging, self-healing ingestion, backups, feedback, workspace_id, RAG guardrails |
+| v1.0 (Phase 8) | ✅ Complete | Production deployment hardening complete (CI, structured logging, ingestion resilience, backups, feedback, workspace groundwork, RAG guardrails) |
 
 ### Post-MVP Vision
 
 | Version | Theme | Key Features |
 |---------|-------|--------------|
-| v1.1 | Agency Workflow | Projects/client isolation (on workspace_id), assistant versioning, saved outputs, prompt library, direct provider API routing |
+| v1.1 | Team Productivity | Conversation sharing, folders/tags, smart search, direct provider API routing |
 | v1.2 | Admin Power Features | Custom templates, assistant cloning, quality scoring, brand voice checker |
 | v1.3 | Integrations | Telegram integration |
 

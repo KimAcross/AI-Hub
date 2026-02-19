@@ -74,7 +74,9 @@ If the reference materials don't contain relevant information, rely on your gene
             List of RetrievedChunk objects sorted by relevance.
         """
         k = top_k if top_k is not None else self.top_k
-        min_threshold = threshold if threshold is not None else self.similarity_threshold
+        min_threshold = (
+            threshold if threshold is not None else self.similarity_threshold
+        )
 
         # Generate embedding for the query
         query_embedding = await self.embedding_service.embed_text(query)
@@ -186,7 +188,7 @@ If the reference materials don't contain relevant information, rely on your gene
         user_query: str,
         top_k: Optional[int] = None,
         threshold: Optional[float] = None,
-        max_context_tokens: Optional[int] = None,
+        max_context_tokens: int = 4000,
     ) -> tuple[str, list[RetrievedChunk]]:
         """Get a system prompt augmented with relevant context.
 
@@ -197,7 +199,7 @@ If the reference materials don't contain relevant information, rely on your gene
             user_query: The user's query to find context for.
             top_k: Number of results to retrieve.
             threshold: Similarity threshold.
-            max_context_tokens: Maximum tokens for context (per-assistant override).
+            max_context_tokens: Cap for context passed to the model.
 
         Returns:
             Tuple of (augmented system prompt, list of retrieved chunks).
@@ -210,9 +212,8 @@ If the reference materials don't contain relevant information, rely on your gene
             threshold=threshold,
         )
 
-        # Format the context with per-assistant token limit
-        context_limit = max_context_tokens if max_context_tokens is not None else 4000
-        context = self.format_context(chunks, max_tokens=context_limit)
+        # Format the context
+        context = self.format_context(chunks, max_tokens=max_context_tokens)
 
         # Build the system prompt
         system_prompt = self.build_system_prompt(

@@ -36,16 +36,16 @@ class Conversation(Base):
         nullable=True,
         index=True,
     )
-    title: Mapped[str] = mapped_column(
-        String(200),
-        nullable=False,
-        default="New Conversation",
-    )
     workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("workspaces.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
+    )
+    title: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="New Conversation",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

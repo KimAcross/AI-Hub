@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -10,13 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select } from '@/components/ui/select'
 import { useCreateUser, useUpdateUser } from '@/hooks/use-admin'
 import type { User, UserRole } from '@/types'
 import { Loader2 } from 'lucide-react'
@@ -29,29 +23,15 @@ interface UserDialogProps {
 }
 
 export function UserDialog({ open, onOpenChange, user, mode }: UserDialogProps) {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
+  const [name, setName] = useState(mode === 'edit' && user ? user.name : '')
+  const [email, setEmail] = useState(mode === 'edit' && user ? user.email : '')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<UserRole>('user')
+  const [role, setRole] = useState<UserRole>(mode === 'edit' && user ? user.role : 'user')
 
   const createUser = useCreateUser()
   const updateUser = useUpdateUser()
 
   const isLoading = createUser.isPending || updateUser.isPending
-
-  useEffect(() => {
-    if (user && mode === 'edit') {
-      setName(user.name)
-      setEmail(user.email)
-      setRole(user.role)
-      setPassword('')
-    } else if (mode === 'create') {
-      setName('')
-      setEmail('')
-      setPassword('')
-      setRole('user')
-    }
-  }, [user, mode, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,16 +112,17 @@ export function UserDialog({ open, onOpenChange, user, mode }: UserDialogProps) 
 
           <div className="space-y-2">
             <Label htmlFor="role">Role</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as UserRole)}>
-              <SelectTrigger id="role">
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">User</SelectItem>
-                <SelectItem value="manager">Manager</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
-            </Select>
+            <Select
+              value={role}
+              onValueChange={(v) => setRole(v as UserRole)}
+              options={[
+                { value: 'user', label: 'User' },
+                { value: 'manager', label: 'Manager' },
+                { value: 'admin', label: 'Admin' },
+              ]}
+              placeholder="Select role"
+              id="role"
+            />
           </div>
 
           <DialogFooter>

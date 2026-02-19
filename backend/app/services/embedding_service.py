@@ -1,6 +1,5 @@
 """Embedding service for generating text embeddings via OpenRouter."""
 
-import asyncio
 from typing import Optional
 
 import httpx

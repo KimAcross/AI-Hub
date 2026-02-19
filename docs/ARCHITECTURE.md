@@ -2,6 +2,8 @@
 
 This document provides a comprehensive overview of the AI-Across system architecture, design decisions, and technical implementation details.
 
+**Last Updated:** February 19, 2026
+
 ## Table of Contents
 
 - [System Overview](#system-overview)
@@ -24,6 +26,24 @@ AI-Across is a self-hosted AI content platform built with a modern microservices
 1. **Presentation Layer** - React SPA (Single Page Application)
 2. **Application Layer** - FastAPI REST API
 3. **Data Layer** - PostgreSQL + ChromaDB
+
+### Implementation Notes (2026-02-19)
+
+- Assistant navigation flow: assistant cards route directly to `/chat?assistant=<id>`.
+- Chat model initialization:
+  - Assistant context -> `assistant.model`
+  - General chat context -> `settings.default_model`
+  - User can override from chat model selector.
+- OpenRouter API key resolution for runtime:
+  - Database settings key is primary source.
+  - Environment variable is fallback.
+- Streaming contract:
+  - Backend emits SSE events with `type: content|done|error`.
+  - Frontend parser supports `done` payloads with `message_id`/`tokens_used` (not only embedded message objects).
+- CI pipeline is in place (`.github/workflows/ci.yml`), including a gated smoke E2E path.
+- Structured logging and request correlation are implemented (`X-Request-ID` + contextual log fields).
+- File ingestion resilience is implemented with retries and a periodic reaper.
+- Backup/restore runbook is documented in `docs/BACKUP.md`.
 
 ### Key Architectural Principles
 
@@ -202,8 +222,7 @@ backend/
 │   │
 │   ├── core/
 │   │   ├── config.py            # Pydantic settings
-│   │   ├── exceptions.py        # Custom exceptions
-│   │   └── logging.py           # Structured JSON logging + contextvars
+│   │   └── exceptions.py        # Custom exceptions
 │   │
 │   ├── db/
 │   │   ├── base.py              # SQLAlchemy base model
@@ -219,8 +238,7 @@ backend/
 │   │   ├── user.py
 │   │   ├── api_key.py
 │   │   ├── usage_quota.py
-│   │   ├── audit_log.py
-│   │   └── workspace.py
+│   │   └── audit_log.py
 │   │
 │   ├── schemas/                 # Pydantic request/response
 │   │   ├── assistant.py
@@ -241,8 +259,7 @@ backend/
 │   │   ├── user_auth_service.py
 │   │   ├── api_key_service.py
 │   │   ├── quota_service.py
-│   │   ├── audit_service.py
-│   │   └── ingestion_reaper.py
+│   │   └── audit_service.py
 │   │
 │   ├── utils/                   # Utilities
 │   │   ├── chunker.py
@@ -353,16 +370,13 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 │ model               │       │ file_path           │
 │ temperature         │       │ size_bytes          │
 │ max_tokens          │       │ chunk_count         │
-│ max_retrieval_chunks│       │ status              │
-│ max_context_tokens  │       │ error_message       │
-│ avatar_url          │       │ processing_started_at│
-│ is_deleted          │       │ attempt_count       │
-│ workspace_id (FK)   │       │ max_attempts        │
-│ created_at          │       │ next_retry_at       │
-│ updated_at          │       │ last_error          │
-└─────────────────────┘       │ workspace_id (FK)   │
-          │                   │ created_at          │
-          │                   └─────────────────────┘
+│ avatar_url          │       │ status              │
+│ is_deleted          │       │ error_message       │
+│ created_at          │       │ created_at          │
+│ updated_at          │       └─────────────────────┘
+└─────────────────────┘
+          │
+          │
           ▼
 ┌─────────────────────┐       ┌─────────────────────┐
 │   conversations     │       │      messages       │
@@ -370,23 +384,12 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 │ id (PK)             │──────<│ id (PK)             │
 │ assistant_id (FK)   │       │ conversation_id (FK)│
 │ user_id (FK)        │       │ role                │
-│ workspace_id (FK)   │       │ content             │
-│ title               │       │ model               │
-│ created_at          │       │ tokens_used (JSONB) │
-│ updated_at          │       │ feedback            │
-└─────────────────────┘       │ feedback_reason     │
-                              │ feedback_context    │
+│ title               │       │ content             │
+│ created_at          │       │ model               │
+│ updated_at          │       │ tokens_used (JSONB) │
+└─────────────────────┘       │                     │
                               │ created_at          │
                               └─────────────────────┘
-
-┌─────────────────────┐
-│    workspaces       │
-├─────────────────────┤
-│ id (PK)             │
-│ name                │
-│ slug (unique)       │
-│ created_at          │
-└─────────────────────┘
 
 ┌─────────────────────┐
 │      settings       │
@@ -449,11 +452,10 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 
 | Table | Primary Key | Indexes | Relationships |
 |-------|-------------|---------|---------------|
-| assistants | UUID | workspace_id | Has many: files, conversations. Belongs to: workspace |
-| knowledge_files | UUID | assistant_id, workspace_id | Belongs to: assistant, workspace |
-| conversations | UUID | assistant_id, user_id, workspace_id, created_at | Belongs to: assistant, user, workspace; Has many: messages |
-| messages | UUID | conversation_id, feedback, created_at | Belongs to: conversation |
-| workspaces | UUID | slug (unique) | Has many: assistants, conversations, knowledge_files |
+| assistants | UUID | - | Has many: files, conversations |
+| knowledge_files | UUID | assistant_id | Belongs to: assistant |
+| conversations | UUID | assistant_id, user_id, created_at | Belongs to: assistant, user; Has many: messages |
+| messages | UUID | conversation_id, created_at | Belongs to: conversation |
 | settings | VARCHAR(100) | - | Standalone key-value |
 | users | UUID | email (unique) | Has many: audit_logs |
 | usage_logs | UUID | created_at | Belongs to: assistant, conversation |
@@ -511,8 +513,7 @@ User Message          RAG Service         Embedding Service      ChromaDB       
 | Chunk Overlap | 50 tokens | Preserves context at boundaries |
 | Embedding Model | text-embedding-3-small | 1536 dimensions |
 | Embedding Dimension | 1536 | OpenAI standard |
-| Top-K | 5 (default, per-assistant configurable 1-20) | Number of chunks to retrieve |
-| Max Context Tokens | 4000 (default, per-assistant configurable 500-32000) | Token budget for retrieved context |
+| Top-K | 5 | Number of chunks to retrieve |
 | Similarity Threshold | 0.7 | Minimum relevance score |
 | Distance Metric | Cosine | Vector similarity measure |
 
@@ -702,12 +703,12 @@ data: {"type": "done", "usage": {"prompt_tokens": 10, "completion_tokens": 5}}
 
 ### Volume Strategy
 
-| Volume | Purpose | Backup Required | Backed Up By |
-|--------|---------|-----------------|--------------|
-| postgres_data | Database | Yes | `docker/scripts/backup.sh` (pg_dump) |
-| chroma_data | Vector embeddings | Yes | `docker/scripts/backup.sh` (tar) |
-| uploads | User files | Yes | `docker/scripts/backup.sh` (tar) |
-| nginx_certs | SSL certificates | No | Regenerate via Let's Encrypt |
+| Volume | Purpose | Backup Required |
+|--------|---------|-----------------|
+| postgres_data | Database | Yes |
+| chroma_data | Vector embeddings | Yes |
+| uploads | User files | Yes |
+| nginx_certs | SSL certificates | No (regenerate) |
 
 ---
 
@@ -794,16 +795,14 @@ Single Server → Read Replicas → Horizontal Scaling
 
 ## Monitoring & Observability
 
-### Observability Stack
+### Planned Instrumentation
 
-| Layer | Tool | Status |
-|-------|------|--------|
-| Application Logs | Structured JSON (`python-json-logger`) with `request_id`, `user_id`, `conversation_id`, `assistant_id` | ✅ Implemented |
-| Request Tracing | `X-Request-ID` header on all responses, correlated across services via contextvars | ✅ Implemented |
-| Health Checks | `/health` (basic), `/ready` (with DB check) | ✅ Implemented |
-| Metrics | Prometheus (planned for v1.2 if operational need emerges) | Planned |
-| Database | pg_stat for query performance | Available |
-| Infrastructure | Docker stats for CPU, memory, disk | Available |
+| Layer | Tool | Metrics |
+|-------|------|---------|
+| Application | Prometheus | Request latency, error rates |
+| Database | pg_stat | Query performance, connections |
+| Infrastructure | Docker stats | CPU, memory, disk |
+| Logs | Structured JSON | Request traces, errors |
 
 ### Health Checks
 
@@ -811,15 +810,6 @@ Single Server → Read Replicas → Horizontal Scaling
 |----------|---------|----------|
 | `GET /api/v1/health` | Basic health check | `{"status": "healthy", "timestamp": "..."}` |
 | `GET /api/v1/ready` | Readiness with DB check | `{"status": "ready", "database": "connected"}` |
-
-### CI Pipeline
-
-GitHub Actions CI (`.github/workflows/ci.yml`) runs on every push to `main` and PR:
-
-| Job | Checks | Runner |
-|-----|--------|--------|
-| Backend | `ruff check`, `ruff format --check`, `alembic upgrade head`, `pytest` | ubuntu-latest + PostgreSQL 15 service |
-| Frontend | `npm run lint`, `npm run test:run`, `npm run build` | ubuntu-latest + Node 20 |
 
 ### Testing Infrastructure
 
@@ -855,12 +845,6 @@ GitHub Actions CI (`.github/workflows/ci.yml`) runs on every push to `main` and 
 | v0.8.0 | Audit logging | ✅ Implemented — Action tracking |
 | v0.9.0 | User auth + conversation isolation | ✅ Implemented — JWT auth on all endpoints, user_id on conversations |
 | v0.9.0 | Security headers + MIME validation | ✅ Implemented — CSP, HSTS, magic byte validation |
-| v1.0.0 | Structured logging + request correlation | ✅ Implemented — JSON logs, X-Request-ID, contextvars |
-| v1.0.0 | Self-healing file ingestion | ✅ Implemented — Reaper task, exponential backoff retries |
-| v1.0.0 | Workspace isolation columns | ✅ Implemented — workspace_id on core tables, default workspace |
-| v1.0.0 | Per-assistant RAG guardrails | ✅ Implemented — max_retrieval_chunks, max_context_tokens |
-| v1.0.0 | Message feedback system | ✅ Implemented — thumbs up/down with reason and model context |
-| v1.0.0 | Backup & restore | ✅ Implemented — pg_dump + tar scripts with rotation |
 | v1.1 | Direct provider API routing | Call Anthropic/Google/OpenAI directly, OpenRouter as fallback |
 | v1.1 | Embedding-based conversation search | Semantic search across all conversations |
 | v1.2 | Content quality scoring pipeline | AI-based output quality assessment |
@@ -901,5 +885,5 @@ GitHub Actions CI (`.github/workflows/ci.yml`) runs on every push to `main` and 
 
 - [High-Level Design](HLD.md)
 - [Development Roadmap](../ROADMAP.md)
-- [API Reference](/docs endpoint)
+- [API Reference](http://localhost:8000/docs)
 - [Deployment Guide](DEPLOYMENT.md)

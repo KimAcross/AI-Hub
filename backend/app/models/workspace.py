@@ -1,17 +1,23 @@
-"""Workspace model for future client isolation."""
+"""Workspace database model for future client isolation."""
 
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING, List
 
 from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
+if TYPE_CHECKING:
+    from app.models.assistant import Assistant
+    from app.models.conversation import Conversation
+    from app.models.knowledge_file import KnowledgeFile
+
 
 class Workspace(Base):
-    """Minimal workspace model for future multi-tenant support."""
+    """Workspace container model."""
 
     __tablename__ = "workspaces"
 
@@ -28,5 +34,6 @@ class Workspace(Base):
         nullable=False,
     )
 
-    def __repr__(self) -> str:
-        return f"<Workspace(id={self.id}, slug='{self.slug}')>"
+    assistants: Mapped[List["Assistant"]] = relationship("Assistant")
+    conversations: Mapped[List["Conversation"]] = relationship("Conversation")
+    knowledge_files: Mapped[List["KnowledgeFile"]] = relationship("KnowledgeFile")

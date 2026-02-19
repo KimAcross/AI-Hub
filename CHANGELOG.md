@@ -5,109 +5,73 @@ All notable changes to AI-Across will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-02-11
+## [Unreleased]
 
 ### Added
-
-#### CI Pipeline (Phase 8, Step 1)
-- GitHub Actions CI workflow (`.github/workflows/ci.yml`) with parallel backend + frontend jobs
-- **Backend job:** ruff lint check, ruff format check, Alembic migration sanity check against empty PostgreSQL, pytest (unit + integration)
-- **Frontend job:** ESLint, Vitest, TypeScript compilation + Vite production build
-- Concurrency control to cancel stale CI runs on the same branch
-- Dependency caching for pip and npm
-
-#### Structured Logging + Request Correlation IDs (Phase 8, Step 2)
-- `backend/app/core/logging.py` — JSON formatter (`python-json-logger`), contextvars for `request_id`/`user_id`/`conversation_id`/`assistant_id`, `get_logger()` helper
-- `RequestContextMiddleware` — generates UUID `request_id` per request, extracts `user_id` from JWT, sets contextvars, adds `X-Request-ID` response header
-- Structured log output in `openrouter_service.py` (model, latency_ms, tokens), `conversation_service.py` (conversation/assistant context), `file_processor.py` (processing stages)
-- `LOG_LEVEL` and `LOG_FORMAT` (text/json) environment variables via `config.py`
-
-#### Self-Healing File Ingestion (Phase 8, Step 3)
-- Alembic migration `005`: adds `processing_started_at`, `attempt_count`, `max_attempts`, `next_retry_at`, `last_error` to `knowledge_files` table
-- `backend/app/services/ingestion_reaper.py` — periodic asyncio task (every 5 min) that detects stuck files (>15 min in `processing`), retries with exponential backoff (5 min → 15 min → 45 min), marks `failed` after max attempts with `last_error` preserved
-- `file_processor.py` sets `processing_started_at` at start, stores errors in `last_error`, resets counters on manual reprocess
-
-#### Backup & Restore (Phase 8, Step 4)
-- `docker/scripts/backup.sh` — `pg_dump` + tar uploads + tar chroma → timestamped directory, automatic rotation by `BACKUP_RETENTION_DAYS`
-- `docker/scripts/restore.sh` — restore from backup directory with confirmation prompt, stops backend, restores data, restarts, verifies health
-- `docs/BACKUP.md` — full runbook: what's backed up, schedule, retention, step-by-step restore, restore drill instructions
-
-#### Message Feedback (Phase 8, Step 5)
-- Alembic migration `006`: adds `feedback` (String 20), `feedback_reason` (Text), `feedback_context` (JSONB) to `messages` table, with index on `feedback`
-- `POST /api/v1/conversations/{id}/messages/{msg_id}/feedback` endpoint — validates ownership and assistant role, idempotent (re-submit overwrites), captures model in `feedback_context`
-- `FeedbackCreate` Pydantic schema with `Literal["positive", "negative"]` validation
-- Frontend: ThumbsUp/ThumbsDown buttons on assistant messages (hover action bar), ThumbsDown shows optional reason input, feedback state visually persisted (green/red icons)
-- Full prop threading: ChatPage → ChatWindow → MessageList → MessageBubble
-
-#### Workspace ID Column (Phase 8, Step 6)
-- `backend/app/models/workspace.py` — minimal model: `id` (UUID), `name`, `slug` (unique), `created_at`
-- Alembic migration `007`: creates `workspaces` table, inserts default workspace, adds nullable `workspace_id` FK to `assistants`, `conversations`, `knowledge_files`, backfills all existing rows to default workspace, creates indexes
-- No API changes, no frontend changes, no behavior changes — pure future-proofing for v1.1 client isolation
-
-#### RAG Guardrails (Phase 8, Step 7)
-- Alembic migration `008`: adds `max_retrieval_chunks` (default 5) and `max_context_tokens` (default 4000) to `assistants` table
-- `rag_service.py` `get_augmented_prompt()` accepts `top_k` and `max_context_tokens` overrides, respects per-assistant limits
-- `conversation_service.py` passes assistant-level RAG caps to RAG service
-- Assistant create/update/response schemas include `max_retrieval_chunks` (1-20) and `max_context_tokens` (500-32000) with validation
-- Frontend: collapsible "Advanced: RAG Settings" section in assistant form with two Slider controls
+- Assistant cards now open chat directly via `/chat?assistant=<id>`, while keeping the 3-dot admin menu for edit/delete/restore actions.
+- Chat page now initializes model by context:
+  - Assistant chat uses `assistant.model`
+  - General chat uses `settings.default_model`
+- Frontend stream parser now supports backend SSE `done` events with `message_id`/`tokens_used` payloads.
+- GitHub Actions CI workflow at `.github/workflows/ci.yml` with:
+  - Parallel backend and frontend jobs.
+  - Optional gated E2E smoke job (`main` pushes, nightly schedule, or manual dispatch).
+- CI smoke test assets for Playwright:
+  - `frontend/playwright.smoke.config.ts`
+  - `frontend/e2e/smoke.spec.ts`
+- New documentation files:
+  - `docs/DEPLOYMENT.md`
+  - `docs/BACKUP.md`
+  - `CONTRIBUTING.md`
+- Structured logging and request correlation support:
+  - JSON logs with context fields (`request_id`, `user_id`, `conversation_id`, `assistant_id`)
+  - `X-Request-ID` response header middleware
+- Self-healing ingestion resilience:
+  - retry metadata on `knowledge_files`
+  - periodic ingestion reaper and exponential backoff retries
+- Message feedback capture:
+  - assistant thumbs up/down with optional reason
+  - feedback context storage (model + retrieval doc IDs)
+- Workspace schema groundwork:
+  - `workspaces` table and `workspace_id` on assistants/conversations/knowledge_files
+- Per-assistant RAG guardrails:
+  - `max_retrieval_chunks`
+  - `max_context_tokens`
+- Backup and restore scripts:
+  - `docker/scripts/backup.sh`
+  - `docker/scripts/restore.sh`
 
 ### Changed
-- All backend services now use structured logging via `app.core.logging.get_logger()` instead of `logging.getLogger()`
-- `X-Request-ID` response header on all API responses for end-to-end request tracing
-- `message_to_response()` now includes `feedback` and `feedback_reason` fields
-- Conversation export includes feedback data on messages
+- `/api/v1/models` now resolves OpenRouter API key from database settings first, then environment fallback.
+- Conversation dependency wiring now injects OpenRouter service with database-stored API key, enabling chat even when key is configured from Settings UI.
+- Frontend CI install now uses `npm ci --legacy-peer-deps` due current React 19 / Testing Library peer dependency conflict.
+- Documentation audit and synchronization across `README.md`, `ROADMAP.md`, `docs/ARCHITECTURE.md`, `docs/HLD.md`, and `frontend/README.md`.
+- Phase 8 tracking aligned to complete (`100%`) in roadmap and docs.
+- Backend file-type dependency is now platform-specific in `backend/requirements.txt`:
+  - `python-magic-bin` on Windows
+  - `python-magic` on non-Windows environments
 
-### Removed
-- Unused `Assistant` import from `file_processor.py`
-- Unused `update` import from `ingestion_reaper.py`
-- Direct `import logging` in `files.py` (replaced with structured logging)
+### Fixed
+- Fixed multiple 500 errors caused by async lazy-loading serialization (`MissingGreenlet`) in auth and conversations paths.
+- Fixed enum value/name mismatch for user/api-key/quota enums when reading from PostgreSQL.
+- Fixed assistant files API handler method reference causing 500s.
+- Fixed models endpoint behavior when OpenRouter is unavailable (returns empty list response instead of hard failure).
+- Fixed frontend crashes from non-array API payloads by normalizing assistants/files/conversations/models responses.
+- Fixed dashboard crash (`assistants?.filter is not a function`) and conversation sidebar crash (`forEach is not a function`).
+- Fixed chat stream client error `"No final message received"` by robust SSE parsing and completion handling.
+- Fixed React crash when rendering FastAPI validation error objects; validation errors are now stringified for UI display.
+- Fixed `onValueChange` warnings in native `Select`/`Slider` wrappers.
+- Fixed chat composer flow that could POST invalid new conversations without assistant context (422).
+- Fixed assistant file count mapping (`file_count` -> `files_count`) in frontend normalization.
+- Fixed chat layout center whitespace by making message list full-width in chat content area.
+- Added fallback favicon to avoid repeated `/favicon.ico` 404 noise in development.
+- Fixed missing internal documentation links (`docs/DEPLOYMENT.md`, `CONTRIBUTING.md`) by adding the referenced files.
+- Fixed migration `003` enum creation flow so fresh PostgreSQL migrations no longer fail on duplicate enum types.
+- Fixed SQLite test compatibility for JSON fields by using SQLAlchemy `JSON` with a PostgreSQL `JSONB` variant in models.
 
-### New Files
-
-| File | Purpose |
-|------|---------|
-| `backend/app/core/logging.py` | Structured JSON logging with contextvars |
-| `backend/app/services/ingestion_reaper.py` | Self-healing file ingestion background task |
-| `backend/app/models/workspace.py` | Workspace model for future multi-tenancy |
-| `backend/alembic/versions/..._005_...py` | Ingestion resilience columns |
-| `backend/alembic/versions/..._006_...py` | Message feedback columns |
-| `backend/alembic/versions/..._007_...py` | Workspace table + workspace_id FKs |
-| `backend/alembic/versions/..._008_...py` | RAG guardrail columns |
-| `docker/scripts/backup.sh` | Automated backup script |
-| `docker/scripts/restore.sh` | Restore from backup script |
-| `docs/BACKUP.md` | Backup & restore runbook |
-
-### New Dependencies
-
-**Backend:**
-- `python-json-logger>=2.0.0` — Structured JSON log formatting
-
-### Database Schema Changes
-
-```sql
--- Migration 005: Ingestion resilience
-ALTER TABLE knowledge_files ADD COLUMN processing_started_at TIMESTAMP;
-ALTER TABLE knowledge_files ADD COLUMN attempt_count INTEGER DEFAULT 0;
-ALTER TABLE knowledge_files ADD COLUMN max_attempts INTEGER DEFAULT 3;
-ALTER TABLE knowledge_files ADD COLUMN next_retry_at TIMESTAMP;
-ALTER TABLE knowledge_files ADD COLUMN last_error TEXT;
-
--- Migration 006: Message feedback
-ALTER TABLE messages ADD COLUMN feedback VARCHAR(20);
-ALTER TABLE messages ADD COLUMN feedback_reason TEXT;
-ALTER TABLE messages ADD COLUMN feedback_context JSONB;
-CREATE INDEX ix_messages_feedback ON messages(feedback);
-
--- Migration 007: Workspace isolation
-CREATE TABLE workspaces (id UUID PK, name VARCHAR(100), slug VARCHAR(100) UNIQUE, created_at TIMESTAMP);
-ALTER TABLE assistants ADD COLUMN workspace_id UUID REFERENCES workspaces(id);
-ALTER TABLE conversations ADD COLUMN workspace_id UUID REFERENCES workspaces(id);
-ALTER TABLE knowledge_files ADD COLUMN workspace_id UUID REFERENCES workspaces(id);
-
--- Migration 008: RAG guardrails
-ALTER TABLE assistants ADD COLUMN max_retrieval_chunks INTEGER DEFAULT 5;
-ALTER TABLE assistants ADD COLUMN max_context_tokens INTEGER DEFAULT 4000;
-```
+### Completed
+- CI baseline stabilized for auth-protected endpoint expectations after Phase 10 hardening.
+- Production hardening docs updated with SSL guidance, VPS flow, backup runbook, and troubleshooting.
 
 ---
 
@@ -801,7 +765,6 @@ src/components/chat/
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| 1.0.0 | 2026-02-11 | Phase 8 complete (v1.0): CI, structured logging, self-healing ingestion, backups, feedback, workspace_id, RAG guardrails |
 | 0.9.0 | 2026-02-10 | Phase 10 complete: Security hardening, user auth, role-based UI, conversation isolation |
 | 0.8.0 | 2026-02-04 | Phase 9 complete: Multi-user, API key management, quotas, audit logging |
 | 0.7.0 | 2026-01-25 | Phase 7 complete: Admin dashboard, usage tracking, cost calculation |
@@ -815,48 +778,6 @@ src/components/chat/
 ---
 
 ## Upgrade Notes
-
-### 0.9.0 → 1.0.0
-
-No breaking changes. All new features are additive.
-
-**New backend dependency:**
-- `python-json-logger>=2.0.0` — Structured JSON log formatting
-
-**New environment variables:**
-- `LOG_LEVEL` — Logging level (default: `INFO`)
-- `LOG_FORMAT` — Log format: `text` for development, `json` for production (default: `text`)
-- `BACKUP_DIR` — Backup storage directory (default: `/backups`)
-- `BACKUP_RETENTION_DAYS` — Number of days to keep backups (default: `7`)
-
-**Database migration required:**
-```bash
-cd backend
-alembic upgrade head
-```
-
-This runs 4 migrations (005-008):
-- `005`: Adds ingestion resilience columns to `knowledge_files`
-- `006`: Adds feedback columns to `messages` with index
-- `007`: Creates `workspaces` table, adds `workspace_id` FK to `assistants`, `conversations`, `knowledge_files`, backfills all rows
-- `008`: Adds `max_retrieval_chunks` and `max_context_tokens` to `assistants`
-
-To upgrade:
-```bash
-# Install new backend dependency
-cd backend && pip install python-json-logger>=2.0.0
-
-# Run migrations
-alembic upgrade head
-
-# Rebuild frontend
-cd frontend && npm run build
-
-# Restart services
-docker-compose down && docker-compose up -d
-```
-
----
 
 ### 0.8.0 → 0.9.0
 

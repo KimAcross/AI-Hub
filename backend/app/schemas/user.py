@@ -31,8 +31,12 @@ class UserCreate(BaseModel):
     """Request schema for creating a user."""
 
     email: EmailStr = Field(..., description="User's email address")
-    password: str = Field(..., min_length=8, max_length=128, description="User's password")
-    name: str = Field(..., min_length=2, max_length=100, description="User's display name")
+    password: str = Field(
+        ..., min_length=8, max_length=128, description="User's password"
+    )
+    name: str = Field(
+        ..., min_length=2, max_length=100, description="User's display name"
+    )
     role: UserRole = Field(default=UserRole.USER, description="User's role")
 
     @field_validator("password")
@@ -45,14 +49,18 @@ class UserUpdate(BaseModel):
     """Request schema for updating a user."""
 
     email: Optional[EmailStr] = Field(None, description="New email address")
-    name: Optional[str] = Field(None, min_length=2, max_length=100, description="New display name")
+    name: Optional[str] = Field(
+        None, min_length=2, max_length=100, description="New display name"
+    )
     role: Optional[UserRole] = Field(None, description="New role")
 
 
 class UserPasswordChange(BaseModel):
     """Request schema for changing a user's password."""
 
-    new_password: str = Field(..., min_length=8, max_length=128, description="New password")
+    new_password: str = Field(
+        ..., min_length=8, max_length=128, description="New password"
+    )
 
     @field_validator("new_password")
     @classmethod
@@ -107,8 +115,12 @@ class UserListResponse(BaseModel):
 class UserApiKeyCreate(BaseModel):
     """Request schema for creating a user API key."""
 
-    name: str = Field(..., min_length=1, max_length=100, description="Name for the API key")
-    expires_in_days: Optional[int] = Field(None, ge=1, le=365, description="Expiration in days")
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="Name for the API key"
+    )
+    expires_in_days: Optional[int] = Field(
+        None, ge=1, le=365, description="Expiration in days"
+    )
 
 
 class UserApiKeyResponse(BaseModel):

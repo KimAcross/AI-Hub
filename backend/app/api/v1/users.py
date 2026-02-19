@@ -6,13 +6,17 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_client_info, get_db, require_admin_role, require_any_role, require_manager_role, verify_csrf_token
+from app.api.deps import (
+    get_client_info,
+    get_db,
+    require_admin_role,
+    require_any_role,
+    require_manager_role,
+    verify_csrf_token,
+)
 from app.core.rate_limit import limiter
 from app.models.user import UserRole
 from app.schemas.user import (
-    UserApiKeyCreate,
-    UserApiKeyCreateResponse,
-    UserApiKeyResponse,
     UserCreate,
     UserListResponse,
     UserLoginRequest,
@@ -23,7 +27,11 @@ from app.schemas.user import (
 )
 from app.services.audit_service import AuditService
 from app.services.user_auth_service import UserAuthService
-from app.services.user_service import UserEmailExistsError, UserNotFoundError, UserService
+from app.services.user_service import (
+    UserEmailExistsError,
+    UserNotFoundError,
+    UserService,
+)
 
 router = APIRouter(prefix="/admin/users", tags=["Admin - Users"])
 
@@ -64,10 +72,15 @@ async def create_user(
             actor_id=_admin.get("sub"),
             ip_address=ip,
             user_agent=user_agent,
-            new_values={"email": user.email, "name": user.name, "role": user.role.value},
+            new_values={
+                "email": user.email,
+                "name": user.name,
+                "role": user.role.value,
+            },
         )
 
         await db.commit()
+        await db.refresh(user)
         return UserResponse.model_validate(user)
 
     except UserEmailExistsError:
@@ -192,6 +205,7 @@ async def update_user(
         )
 
         await db.commit()
+        await db.refresh(user)
         return UserResponse.model_validate(user)
 
     except UserNotFoundError:
@@ -237,6 +251,7 @@ async def disable_user(
         )
 
         await db.commit()
+        await db.refresh(user)
         return UserResponse.model_validate(user)
 
     except UserNotFoundError:
@@ -277,6 +292,7 @@ async def enable_user(
         )
 
         await db.commit()
+        await db.refresh(user)
         return UserResponse.model_validate(user)
 
     except UserNotFoundError:

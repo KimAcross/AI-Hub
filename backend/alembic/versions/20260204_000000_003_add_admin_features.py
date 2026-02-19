@@ -5,6 +5,7 @@ Revises: 002
 Create Date: 2026-02-04 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -20,19 +21,31 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Create enum types
-    user_role_enum = postgresql.ENUM("admin", "manager", "user", name="userrole", create_type=False)
+    user_role_enum = postgresql.ENUM(
+        "admin", "manager", "user", name="userrole", create_type=False
+    )
     user_role_enum.create(op.get_bind(), checkfirst=True)
 
     api_key_provider_enum = postgresql.ENUM(
-        "openrouter", "openai", "anthropic", "google", "azure", "custom",
-        name="apikeyprovider", create_type=False
+        "openrouter",
+        "openai",
+        "anthropic",
+        "google",
+        "azure",
+        "custom",
+        name="apikeyprovider",
+        create_type=False,
     )
     api_key_provider_enum.create(op.get_bind(), checkfirst=True)
 
-    api_key_status_enum = postgresql.ENUM("valid", "invalid", "untested", name="apikeystatus", create_type=False)
+    api_key_status_enum = postgresql.ENUM(
+        "valid", "invalid", "untested", name="apikeystatus", create_type=False
+    )
     api_key_status_enum.create(op.get_bind(), checkfirst=True)
 
-    quota_scope_enum = postgresql.ENUM("global", "user", name="quotascope", create_type=False)
+    quota_scope_enum = postgresql.ENUM(
+        "global", "user", name="quotascope", create_type=False
+    )
     quota_scope_enum.create(op.get_bind(), checkfirst=True)
 
     # Create users table
@@ -44,7 +57,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column(
             "role",
-            postgresql.ENUM("admin", "manager", "user", name="userrole", create_type=False),
+            user_role_enum,
             nullable=False,
             server_default="user",
         ),
@@ -95,9 +108,15 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("idx_user_api_keys_user_id", "user_api_keys", ["user_id"], unique=False)
-    op.create_index("idx_user_api_keys_key_prefix", "user_api_keys", ["key_prefix"], unique=False)
-    op.create_index("idx_user_api_keys_is_active", "user_api_keys", ["is_active"], unique=False)
+    op.create_index(
+        "idx_user_api_keys_user_id", "user_api_keys", ["user_id"], unique=False
+    )
+    op.create_index(
+        "idx_user_api_keys_key_prefix", "user_api_keys", ["key_prefix"], unique=False
+    )
+    op.create_index(
+        "idx_user_api_keys_is_active", "user_api_keys", ["is_active"], unique=False
+    )
 
     # Create api_keys table (for AI provider keys)
     op.create_table(
@@ -105,7 +124,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "provider",
-            postgresql.ENUM("openrouter", "openai", "anthropic", "google", "azure", "custom", name="apikeyprovider", create_type=False),
+            api_key_provider_enum,
             nullable=False,
         ),
         sa.Column("name", sa.String(length=100), nullable=False),
@@ -127,7 +146,7 @@ def upgrade() -> None:
         sa.Column("last_tested_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "test_status",
-            postgresql.ENUM("valid", "invalid", "untested", name="apikeystatus", create_type=False),
+            api_key_status_enum,
             nullable=False,
             server_default="untested",
         ),
@@ -167,7 +186,7 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column(
             "scope",
-            postgresql.ENUM("global", "user", name="quotascope", create_type=False),
+            quota_scope_enum,
             nullable=False,
             server_default="global",
         ),
@@ -177,8 +196,12 @@ def upgrade() -> None:
             nullable=True,
             comment="User ID if scope is USER, null for GLOBAL",
         ),
-        sa.Column("daily_cost_limit_usd", sa.Numeric(precision=10, scale=2), nullable=True),
-        sa.Column("monthly_cost_limit_usd", sa.Numeric(precision=10, scale=2), nullable=True),
+        sa.Column(
+            "daily_cost_limit_usd", sa.Numeric(precision=10, scale=2), nullable=True
+        ),
+        sa.Column(
+            "monthly_cost_limit_usd", sa.Numeric(precision=10, scale=2), nullable=True
+        ),
         sa.Column("daily_token_limit", sa.Integer(), nullable=True),
         sa.Column("monthly_token_limit", sa.Integer(), nullable=True),
         sa.Column("requests_per_minute", sa.Integer(), nullable=True),
@@ -205,7 +228,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_usage_quotas_scope", "usage_quotas", ["scope"], unique=False)
-    op.create_index("idx_usage_quotas_scope_id", "usage_quotas", ["scope_id"], unique=False)
+    op.create_index(
+        "idx_usage_quotas_scope_id", "usage_quotas", ["scope_id"], unique=False
+    )
 
     # Create audit_logs table
     op.create_table(
@@ -276,10 +301,16 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("idx_audit_logs_action", "audit_logs", ["action"], unique=False)
-    op.create_index("idx_audit_logs_resource_type", "audit_logs", ["resource_type"], unique=False)
-    op.create_index("idx_audit_logs_resource_id", "audit_logs", ["resource_id"], unique=False)
+    op.create_index(
+        "idx_audit_logs_resource_type", "audit_logs", ["resource_type"], unique=False
+    )
+    op.create_index(
+        "idx_audit_logs_resource_id", "audit_logs", ["resource_id"], unique=False
+    )
     op.create_index("idx_audit_logs_actor", "audit_logs", ["actor"], unique=False)
-    op.create_index("idx_audit_logs_created_at", "audit_logs", ["created_at"], unique=False)
+    op.create_index(
+        "idx_audit_logs_created_at", "audit_logs", ["created_at"], unique=False
+    )
 
     # Insert default global quota
     op.execute(

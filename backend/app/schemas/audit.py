@@ -19,7 +19,9 @@ class AuditLogResponse(BaseModel):
     actor_id: Optional[str] = Field(None, description="Actor's user ID")
     ip_address: Optional[str] = Field(None, description="Request IP address")
     user_agent: Optional[str] = Field(None, description="Request user agent")
-    details: Optional[dict[str, Any]] = Field(None, description="Additional action details")
+    details: Optional[dict[str, Any]] = Field(
+        None, description="Additional action details"
+    )
     old_values: Optional[dict[str, Any]] = Field(None, description="Previous values")
     new_values: Optional[dict[str, Any]] = Field(None, description="New values")
     created_at: datetime = Field(description="Timestamp when action occurred")

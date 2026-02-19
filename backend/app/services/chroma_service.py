@@ -108,10 +108,7 @@ class ChromaService:
         collection = self.get_or_create_collection(assistant_id)
 
         # Generate unique IDs for each chunk
-        ids = [
-            f"{file_id}_{i}"
-            for i in range(len(chunks))
-        ]
+        ids = [f"{file_id}_{i}" for i in range(len(chunks))]
 
         # Build metadata for each chunk
         if metadatas is None:

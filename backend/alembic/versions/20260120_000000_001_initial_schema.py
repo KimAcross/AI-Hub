@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-01-20 00:00:00.000000
 
 """
+
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -33,7 +34,10 @@ def upgrade() -> None:
             server_default="anthropic/claude-3.5-sonnet",
         ),
         sa.Column(
-            "temperature", sa.Numeric(precision=3, scale=2), nullable=False, server_default="0.7"
+            "temperature",
+            sa.Numeric(precision=3, scale=2),
+            nullable=False,
+            server_default="0.7",
         ),
         sa.Column("max_tokens", sa.Integer(), nullable=False, server_default="4096"),
         sa.Column("avatar_url", sa.String(length=500), nullable=True),
@@ -126,7 +130,9 @@ def upgrade() -> None:
         sa.Column("role", sa.String(length=20), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("model", sa.String(length=100), nullable=True),
-        sa.Column("tokens_used", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column(
+            "tokens_used", postgresql.JSONB(astext_type=sa.Text()), nullable=True
+        ),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),

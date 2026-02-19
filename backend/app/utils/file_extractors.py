@@ -60,7 +60,9 @@ class DOCXExtractor:
         # Also extract text from tables
         for table in doc.tables:
             for row in table.rows:
-                row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                row_text = [
+                    cell.text.strip() for cell in row.cells if cell.text.strip()
+                ]
                 if row_text:
                     text_parts.append(" | ".join(row_text))
 

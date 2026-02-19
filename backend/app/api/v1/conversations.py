@@ -18,8 +18,8 @@ from app.schemas.conversation import (
     ConversationExport,
     ConversationListResponse,
     ConversationResponse,
+    MessageFeedbackRequest,
     ConversationUpdate,
-    FeedbackCreate,
     MessageResponse,
     MessageUpdate,
 )
@@ -270,6 +270,38 @@ async def edit_message(
         )
 
 
+@router.post(
+    "/{conversation_id}/messages/{message_id}/feedback",
+    response_model=MessageResponse,
+    summary="Submit feedback for an assistant message",
+)
+async def submit_message_feedback(
+    conversation_id: UUID,
+    message_id: UUID,
+    data: MessageFeedbackRequest,
+    service: Annotated[ConversationService, Depends(get_conversation_service)],
+    auth: dict = Depends(require_any_role),
+) -> MessageResponse:
+    """Store thumbs up/down feedback for a generated assistant message."""
+    try:
+        user_id, is_admin = _extract_user_context(auth)
+        await service.get_conversation(
+            conversation_id, user_id=user_id, is_admin=is_admin
+        )
+        message = await service.add_message_feedback(
+            conversation_id=conversation_id,
+            message_id=message_id,
+            feedback=data.feedback,
+            feedback_reason=data.feedback_reason,
+        )
+        return message_to_response(message)
+    except ConversationNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+
 @router.get(
     "/{conversation_id}/export",
     response_model=ConversationExport,
@@ -288,47 +320,6 @@ async def export_conversation(
             conversation_id, user_id=user_id, is_admin=is_admin
         )
         return await service.export_conversation(conversation_id)
-    except ConversationNotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        )
-
-
-@router.post(
-    "/{conversation_id}/messages/{message_id}/feedback",
-    response_model=MessageResponse,
-    summary="Submit feedback on a message",
-)
-async def submit_feedback(
-    conversation_id: UUID,
-    message_id: UUID,
-    data: FeedbackCreate,
-    service: Annotated[ConversationService, Depends(get_conversation_service)],
-    auth: dict = Depends(require_any_role),
-) -> MessageResponse:
-    """Submit thumbs up/down feedback on an assistant message."""
-    try:
-        user_id, is_admin = _extract_user_context(auth)
-        # Verify conversation ownership
-        await service.get_conversation(
-            conversation_id, user_id=user_id, is_admin=is_admin
-        )
-
-        # Verify message belongs to this conversation
-        message = await service.get_message(message_id)
-        if message.conversation_id != conversation_id:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Message not found in this conversation",
-            )
-
-        message = await service.submit_feedback(
-            message_id=message_id,
-            feedback=data.feedback,
-            reason=data.reason,
-        )
-        return message_to_response(message)
     except ConversationNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

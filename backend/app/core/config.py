@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     app_name: str = "AI-Across"
     app_env: str = "development"
     debug: bool = False  # Secure default: disabled
+    log_level: str = "INFO"
+    log_format: str = "json"
 
     # Database
     database_url: str = "postgresql+asyncpg://aiacross:aiacross@localhost:5432/aiacross"
@@ -42,6 +44,8 @@ class Settings(BaseSettings):
     # File Storage
     upload_dir: str = "./data/uploads"
     max_file_size_mb: int = 50
+    ingestion_reaper_interval_seconds: int = 300
+    ingestion_stale_processing_minutes: int = 15
 
     # Security
     secret_key: str = "change-this-secret-key-in-production"
@@ -52,10 +56,6 @@ class Settings(BaseSettings):
 
     # CORS
     cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
-
-    # Logging
-    log_level: str = "INFO"
-    log_format: str = "text"  # "json" for structured, "text" for development
 
     # Rate Limiting
     rate_limit_enabled: bool = True
@@ -82,7 +82,7 @@ class Settings(BaseSettings):
             if self.secret_key == "change-this-secret-key-in-production":
                 raise ValueError(
                     "SECRET_KEY must be changed from default value in production. "
-                    "Generate a secure key with: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+                    'Generate a secure key with: python -c "import secrets; print(secrets.token_urlsafe(32))"'
                 )
 
             # Warn if DEBUG is enabled in production

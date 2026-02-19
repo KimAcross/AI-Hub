@@ -59,7 +59,6 @@ class TestSettingsAPI:
         )
 
         assert response.status_code == 200
-        data = response.json()
         # Note: openrouter_api_key_set could still be True if env var is set
         # This test just verifies the endpoint works
 
